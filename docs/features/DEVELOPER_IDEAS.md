@@ -1,0 +1,9 @@
+# Developer Ideas
+
+Settings version is tapped three times within two seconds to reveal Developer Options. Access expires after 30 seconds without touch activity and is removed when switching main tabs. Pointer/keyboard activity on web and touch activity on native renew access through a reusable lifecycle hook.
+
+Ideas are device-local and work offline. Native storage is SQLite key/value data; web storage is localStorage. A stable UUID, title, description, category, priority, status, creation/update timestamps and optional implementation reference form the shared schema. States are new, considering, approved, in_progress, implemented, deferred and rejected. These are the task-specific names corresponding to UADS pending/review states.
+
+The UI supports create/edit/delete confirmation, duplication with a new ID, search, selected status filters and sorting newest first, JSON export/share and file/paste import. An import preview reports additions/conflicts; default apply adds new IDs and preserves current entries. Replacing conflicts requires a distinct explicit action. Invalid schema versions/records and duplicate incoming IDs are rejected. Storage writes precede UI replacement.
+
+Interchange format: `{schemaVersion:1, project:'org.openrecode.pathway', exportedAt:<ISO>, ideas:[...]}`. The validation contract is in packages/shared. The initial `docs/IDEAS.json` is empty. No private device collection was retrieved. The agent reads repository Ideas on new development sessions but cannot reach private on-device storage without an authorized export. Automatic repository/P2P sync, screenshots, Markdown export, multiselect, full status-history journal and direct release-link UI are not implemented yet. Implementation references exist in the model; marking implemented remains a human-controlled action, not automatic verification.

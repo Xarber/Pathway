@@ -1,0 +1,15 @@
+# Example only. Adapt to your own authorized domain and paths.
+pathway.example.org {
+  handle /api/* {
+    reverse_proxy 127.0.0.1:3001
+  }
+  handle /health {
+    reverse_proxy 127.0.0.1:3001
+  }
+  handle {
+    root * /srv/pathway/current
+    try_files {path} {path}.html /index.html
+    file_server
+    header /sw.js Cache-Control "no-cache"
+  }
+}

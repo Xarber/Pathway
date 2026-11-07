@@ -1,0 +1,12 @@
+name: Bug report
+description: Report reproducible behavior without private location data
+body:
+  - type: textarea
+    attributes: {label: What happened, description: Do not include private coordinates, tokens, invitations or account details.}
+    validations: {required: true}
+  - type: textarea
+    attributes: {label: Steps to reproduce}
+    validations: {required: true}
+  - type: input
+    attributes: {label: Version and platform}
+    validations: {required: true}

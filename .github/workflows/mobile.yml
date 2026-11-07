@@ -1,0 +1,74 @@
+name: Mobile build matrix
+on:
+  workflow_dispatch:
+  push:
+    branches: [beta, main]
+permissions:
+  contents: read
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24, cache: npm}
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run export:web
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {variant: ios-unsigned, runner: macos-latest}
+          - {variant: ios-simulator, runner: macos-latest}
+          - {variant: android-apk, runner: ubuntu-latest}
+          - {variant: android-aab, runner: ubuntu-latest}
+    runs-on: ${{ matrix.runner }}
+    env:
+      EXPO_PUBLIC_API_URL: ${{ vars.PATHWAY_API_URL }}
+      GOOGLE_MAPS_ANDROID_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_KEY }}
+      RELEASE_CHANNEL: ${{ github.ref_name == 'main' && 'stable' || 'beta' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24, cache: npm}
+      - uses: actions/setup-java@v4
+        if: startsWith(matrix.variant, 'android')
+        with: {distribution: temurin, java-version: 17}
+      - uses: android-actions/setup-android@v3
+        if: startsWith(matrix.variant, 'android')
+      - run: npm ci
+      - name: Restore existing Android signing key
+        if: startsWith(matrix.variant, 'android')
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_B64" || { echo 'Release signing is not configured'; exit 1; }
+          echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/pathway.keystore"
+      - run: bash scripts/build-mobile.sh '${{ matrix.variant }}'
+        env:
+          PATHWAY_KEYSTORE_PATH: ${{ runner.temp }}/pathway.keystore
+          PATHWAY_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          PATHWAY_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          PATHWAY_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - name: Record checksums
+        run: python3 scripts/checksums.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pathway-${{ github.ref_name }}-${{ matrix.variant }}-${{ github.sha }}
+          path: |
+            artifacts/*.ipa
+            artifacts/*.app.zip
+            artifacts/*.apk
+            artifacts/*.aab
+            artifacts/SHA256SUMS
+  release-readiness:
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Builds passed. Publication remains disabled until distribution is explicitly authorized and artifact validation is completed.'

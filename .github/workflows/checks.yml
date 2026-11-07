@@ -1,0 +1,34 @@
+name: Manual checks
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_DB: pathway_test
+          POSTGRES_USER: pathway
+          POSTGRES_PASSWORD: test-only-password
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U pathway -d pathway_test" --health-interval 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24, cache: npm}
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm test
+        env:
+          TEST_DATABASE_URL: postgres://pathway:test-only-password@localhost:5432/pathway_test
+      - run: npm run build:server
+      - run: npm run export:web
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: browser-evidence, path: artifacts/*.png}

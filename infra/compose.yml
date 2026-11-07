@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_DB: pathway
+      POSTGRES_USER: pathway
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a strong URL-safe database password}
+    ports: ['127.0.0.1:5432:5432']
+    volumes: [pathway-db:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U pathway -d pathway']
+      interval: 5s
+      retries: 10
+    mem_limit: 1g
+    restart: unless-stopped
+  api:
+    build: {context: .., dockerfile: infra/Dockerfile}
+    environment:
+      DATABASE_URL: postgres://pathway:${POSTGRES_PASSWORD}@db:5432/pathway
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:4173}
+      ROUTING_URL: ${ROUTING_URL:-}
+      GEOCODING_URL: ${GEOCODING_URL:-}
+      PROVIDER_CONTACT: ${PROVIDER_CONTACT:-}
+      BUILD_COMMIT: ${BUILD_COMMIT:-development}
+    ports: ['127.0.0.1:3001:3001']
+    depends_on: {db: {condition: service_healthy}}
+    read_only: true
+    tmpfs: [/tmp]
+    mem_limit: 512m
+    restart: unless-stopped
+  routing:
+    profiles: [routing]
+    image: ${VALHALLA_IMAGE:-ghcr.io/valhalla/valhalla-scripted:latest}
+    volumes: ['./routing-data:/custom_files']
+    environment: {server_threads: 2, build_elevation: 'False'}
+    ports: ['127.0.0.1:8002:8002']
+    mem_limit: 4g
+    restart: unless-stopped
+volumes:
+  pathway-db:
