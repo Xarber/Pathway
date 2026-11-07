@@ -1,7 +1,58 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { Coordinate } from '../../shared/src/index.js';
-export function distance(a:Coordinate,b:Coordinate):number {const r=Math.PI/180;const p=(b.latitude-a.latitude)*r,q=(b.longitude-a.longitude)*r;const h=Math.sin(p/2)**2+Math.cos(a.latitude*r)*Math.cos(b.latitude*r)*Math.sin(q/2)**2;return 6371008.8*2*Math.asin(Math.sqrt(Math.min(1,h)));}
+export function distance(a: Coordinate, b: Coordinate): number {
+  const r = Math.PI / 180;
+  const p = (b.latitude - a.latitude) * r,
+    q = (b.longitude - a.longitude) * r;
+  const h =
+    Math.sin(p / 2) ** 2 +
+    Math.cos(a.latitude * r) * Math.cos(b.latitude * r) * Math.sin(q / 2) ** 2;
+  return 6371008.8 * 2 * Math.asin(Math.sqrt(Math.min(1, h)));
+}
 // Fixed 0.02-degree cells: cell centre only. Accuracy is a conservative enclosing radius.
-export function coarse(p:Coordinate){const lat=Math.min(89.99,Math.max(-89.99,(Math.floor((p.latitude+90)/.02)+.5)*.02-90));const lon=Math.min(179.99,Math.max(-179.99,(Math.floor((p.longitude+180)/.02)+.5)*.02-180));return {latitude:Number(lat.toFixed(2)),longitude:Number(lon.toFixed(2)),accuracy:1600};}
-export function arrivalState(samples:{point:Coordinate;accuracy:number;timestamp:number}[],destination:Coordinate,now=Date.now()):'approaching'|'possibly_arrived' {const valid=samples.filter(s=>now-s.timestamp<120000&&s.timestamp<=now&&s.accuracy<=60&&distance(s.point,destination)+s.accuracy<=120).sort((a,b)=>a.timestamp-b.timestamp);return valid.length>=3 && valid.at(-1)!.timestamp-valid[0].timestamp>=30000?'possibly_arrived':'approaching';}
-export function rankMeetingPoints(candidates:{id:string;durations:number[]}[],mode:'total'|'latest'|'balanced'='latest'){return candidates.filter(c=>c.durations.length>0&&c.durations.every(d=>Number.isFinite(d)&&d>=0)).map(c=>({...c,score:mode==='total'?c.durations.reduce((a,b)=>a+b,0):mode==='latest'?Math.max(...c.durations):Math.max(...c.durations)-Math.min(...c.durations)+Math.max(...c.durations)*.25})).sort((a,b)=>a.score-b.score);}
+export function coarse(p: Coordinate) {
+  const lat = Math.min(
+    89.99,
+    Math.max(-89.99, (Math.floor((p.latitude + 90) / 0.02) + 0.5) * 0.02 - 90),
+  );
+  const lon = Math.min(
+    179.99,
+    Math.max(-179.99, (Math.floor((p.longitude + 180) / 0.02) + 0.5) * 0.02 - 180),
+  );
+  return { latitude: Number(lat.toFixed(2)), longitude: Number(lon.toFixed(2)), accuracy: 1600 };
+}
+export function arrivalState(
+  samples: { point: Coordinate; accuracy: number; timestamp: number }[],
+  destination: Coordinate,
+  now = Date.now(),
+): 'approaching' | 'possibly_arrived' {
+  const valid = samples
+    .filter(
+      (s) =>
+        now - s.timestamp < 120000 &&
+        s.timestamp <= now &&
+        s.accuracy <= 60 &&
+        distance(s.point, destination) + s.accuracy <= 120,
+    )
+    .sort((a, b) => a.timestamp - b.timestamp);
+  return valid.length >= 3 && valid.at(-1)!.timestamp - valid[0].timestamp >= 30000
+    ? 'possibly_arrived'
+    : 'approaching';
+}
+export function rankMeetingPoints(
+  candidates: { id: string; durations: number[] }[],
+  mode: 'total' | 'latest' | 'balanced' = 'latest',
+) {
+  return candidates
+    .filter((c) => c.durations.length > 0 && c.durations.every((d) => Number.isFinite(d) && d >= 0))
+    .map((c) => ({
+      ...c,
+      score:
+        mode === 'total'
+          ? c.durations.reduce((a, b) => a + b, 0)
+          : mode === 'latest'
+            ? Math.max(...c.durations)
+            : Math.max(...c.durations) - Math.min(...c.durations) + Math.max(...c.durations) * 0.25,
+    }))
+    .sort((a, b) => a.score - b.score);
+}

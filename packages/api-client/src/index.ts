@@ -1,6 +1,61 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-export class ApiError extends Error {constructor(public status:number,message:string){super(message);}}
-export class ApiClient {constructor(public baseUrl:string,public token:string|null=null){}
- async request<T=any>(path:string,method='GET',body?:unknown):Promise<T>{let response:Response;try{response=await fetch(this.baseUrl+'/api/v1'+path,{method,headers:{...(this.token?{Authorization:'Bearer '+this.token}:{}),...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(18000)});}catch{throw new ApiError(0,'Unable to reach your instance. Live updates are not being delivered.');}const result=await response.json();if(!response.ok)throw new ApiError(response.status,result.error||'Request failed');return result;}
- async live(roomId:string,onData:(data:any)=>void,onStatus:(status:string)=>void){const {ticket}=await this.request<{ticket:string}>('/journeys/'+roomId+'/ws-ticket','POST');const socket=new WebSocket(this.baseUrl.replace(/^http/,'ws')+'/api/v1/live');socket.onopen=()=>{socket.send(JSON.stringify({ticket}));};socket.onmessage=e=>{try{const event=JSON.parse(e.data);if(event.type==='journey.snapshot'){onStatus('Connected');onData(event.data);}else if(event.type==='access.revoked'){onStatus('Access revoked');onData(null);}}catch{onStatus('Invalid server response');}};socket.onclose=()=>onStatus('Disconnected');socket.onerror=()=>onStatus('Disconnected');return socket;}
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+export class ApiClient {
+  constructor(
+    public baseUrl: string,
+    public token: string | null = null,
+  ) {}
+  async request<T = any>(path: string, method = 'GET', body?: unknown): Promise<T> {
+    let response: Response;
+    try {
+      response = await fetch(this.baseUrl + '/api/v1' + path, {
+        method,
+        headers: {
+          ...(this.token ? { Authorization: 'Bearer ' + this.token } : {}),
+          ...(body ? { 'Content-Type': 'application/json' } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(18000),
+      });
+    } catch {
+      throw new ApiError(0, 'Unable to reach your instance. Live updates are not being delivered.');
+    }
+    const result = await response.json();
+    if (!response.ok) throw new ApiError(response.status, result.error || 'Request failed');
+    return result;
+  }
+  async live(roomId: string, onData: (data: any) => void, onStatus: (status: string) => void) {
+    const { ticket } = await this.request<{ ticket: string }>(
+      '/journeys/' + roomId + '/ws-ticket',
+      'POST',
+    );
+    const socket = new WebSocket(this.baseUrl.replace(/^http/, 'ws') + '/api/v1/live');
+    socket.onopen = () => {
+      socket.send(JSON.stringify({ ticket }));
+    };
+    socket.onmessage = (e) => {
+      try {
+        const event = JSON.parse(e.data);
+        if (event.type === 'journey.snapshot') {
+          onStatus('Connected');
+          onData(event.data);
+        } else if (event.type === 'access.revoked') {
+          onStatus('Access revoked');
+          onData(null);
+        }
+      } catch {
+        onStatus('Invalid server response');
+      }
+    };
+    socket.onclose = () => onStatus('Disconnected');
+    socket.onerror = () => onStatus('Disconnected');
+    return socket;
+  }
 }

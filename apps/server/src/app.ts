@@ -1,102 +1,402 @@
+import { fail, activeStatuses, REMOTE } from './context.js';
+import { registerAccounts } from './routes/accounts.js';
+import { registerJourneys } from './routes/journeys.js';
+import { registerSharing } from './routes/sharing.js';
+import { registerCoordination } from './routes/coordination.js';
+import { registerSocial } from './routes/social.js';
 // SPDX-License-Identifier: AGPL-3.0-only
-import Fastify, {type FastifyRequest} from 'fastify';
+import Fastify, { type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
-import {randomUUID} from 'node:crypto';
-import {z,ZodError} from 'zod';
-import {Serial,type Database,migrate} from './db.js';
-import {hash,token,passwordHash,passwordMatches} from './auth.js';
-import {providers,type Providers} from './providers.js';
-import {coordinate,place,transport,precision,participantStatus,type Journey,type Participant} from '../../../packages/shared/src/index.js';
-import {coarse,rankMeetingPoints} from '../../../packages/geospatial/src/index.js';
-import type {WebSocket} from 'ws';
-const fail=(statusCode:number,message:string):never=>{throw Object.assign(new Error(message),{statusCode});};
-const idSchema=z.object({id:z.uuid()});
-const activeStatuses=['scheduled','active'];
-export async function createApp(config:{db:Database;providers?:Providers;now?:()=>number;origins?:string[];production?:boolean}){
- const db=config.db,now=config.now||Date.now,serial=new Serial();await migrate(db);
- const geo=config.providers||providers({routingUrl:process.env.ROUTING_URL,geocodingUrl:process.env.GEOCODING_URL,contact:process.env.PROVIDER_CONTACT});
- const app=Fastify({logger:false,bodyLimit:32768,trustProxy:false});
- await app.register(cors,{origin:config.origins||['http://localhost:8081','http://localhost:4173']});await app.register(helmet);await app.register(rateLimit,{max:120,timeWindow:60000});await app.register(websocket,{options:{maxPayload:1024}});
- app.setErrorHandler((error,_req,reply)=>{const e=error as Error & {statusCode?:number;code?:string};const status=e instanceof ZodError?400:e.statusCode||((e.code==='23505'||e.code?.startsWith('SQLITE_CONSTRAINT'))?409:500);reply.code(status).send({error:status===500?'Internal server error':e instanceof ZodError?'Invalid request':status===409?'A conflicting record already exists':e.message});});
- app.addHook('onSend',async(_req,reply,payload)=>{reply.header('Cache-Control','no-store');return payload;});
- const one=async(sql:string,p:any[]=[]) => (await db.all(sql,p))[0];
- async function user(req:FastifyRequest){const bearer=req.headers.authorization?.match(/^Bearer (\S+)$/)?.[1];if(!bearer)fail(401,'Sign in required');const s=await one('SELECT user_id, hash FROM sessions WHERE hash=? AND expires_at>?',[hash(bearer!),now()]);if(!s)fail(401,'Session expired');return s.user_id as string;}
- async function blocked(a:string,b:string){return !!await one('SELECT owner_id FROM blocks WHERE (owner_id=? AND target_id=?) OR (owner_id=? AND target_id=?)',[a,b,b,a]);}
- async function room(id:string,uid:string,owner=false){const r=await one('SELECT j.*,p.role FROM journeys j JOIN participants p ON p.journey_id=j.id WHERE j.id=? AND p.user_id=?',[id,uid]);if(!r)fail(404,'Journey unavailable');if(owner&&r.owner_id!==uid)fail(403,'Only the organizer can do that');return r;}
- async function openRoom(id:string,uid:string,owner=false){const r=await room(id,uid,owner);if(!activeStatuses.includes(r.status)||Number(r.expires_at)<=now())fail(409,'Journey is no longer open');return r;}
- async function snapshot(id:string,uid:string):Promise<Journey>{const r=await room(id,uid);const members=await db.all('SELECT p.*,u.name FROM participants p JOIN users u ON u.id=p.user_id WHERE p.journey_id=?',[id]);const participants:Participant[]=[];let myGrant:Journey['myGrant'];for(const p of members){if(p.user_id!==uid&&await blocked(uid,p.user_id))continue;
- const grant=await one('SELECT * FROM grants WHERE journey_id=? AND user_id=? AND expires_at>?',[id,p.user_id,now()]);const can=activeStatuses.includes(r.status)&&Number(r.expires_at)>now()&&grant&&(p.user_id===uid||JSON.parse(grant.viewers).includes(uid));const item:Participant={id:p.user_id,name:p.name,role:p.role,status:p.status,mode:p.mode,delayMinutes:p.delay_minutes,sharing:can?grant.mode:'off'};
- if(can){item.expiresAt=Number(grant.expires_at);if(p.user_id===uid)myGrant={mode:grant.mode,expiresAt:Number(grant.expires_at),viewers:JSON.parse(grant.viewers)};if(['precise','approximate'].includes(grant.mode)){const fix=await one('SELECT * FROM live_locations WHERE journey_id=? AND user_id=? AND timestamp>?',[id,p.user_id,now()-300000]);if(fix)item.location={latitude:fix.latitude,longitude:fix.longitude,accuracy:fix.accuracy,timestamp:Number(fix.timestamp),stale:now()-Number(fix.timestamp)>60000};}
- const eta=await one('SELECT * FROM etas WHERE journey_id=? AND user_id=?',[id,p.user_id]);if(eta&&['eta','precise','approximate'].includes(grant.mode))item.eta={arrival:Number(eta.arrival),calculatedAt:Number(eta.calculated_at),source:eta.source,stale:now()-Number(eta.calculated_at)>300000};}
- participants.push(item);}
- const messages=[];for(const m of await db.all('SELECT m.*,u.name FROM messages m JOIN users u ON u.id=m.sender_id WHERE journey_id=? ORDER BY created_at DESC LIMIT 100',[id]))if(!await blocked(uid,m.sender_id))messages.push({id:m.id,senderId:m.sender_id,name:m.name,body:m.body,createdAt:Number(m.created_at)});
- const proposals=[];for(const p of await db.all('SELECT * FROM proposals WHERE journey_id=?',[id]))if(!await blocked(uid,p.proposer))proposals.push({id:p.id,place:JSON.parse(p.place),proposer:p.proposer});
- const etas=participants.filter(p=>p.status!=='arrived').map(p=>p.eta).filter(e=>e&&!e.stale);return {id:r.id,title:r.title,description:r.description,destination:JSON.parse(r.destination),meetingPoint:r.meeting_point?JSON.parse(r.meeting_point):null,status:r.status,createdAt:Number(r.created_at),expiresAt:Number(r.expires_at),ownerId:r.owner_id,participants,messages:messages.reverse(),proposals,myGrant,groupArrival:etas.length?Math.max(...etas.map(e=>e!.arrival)):null,groupEtaComplete:participants.every(p=>p.status==='arrived'||(p.eta&&!p.eta.stale))};}
- const clients=new Map<WebSocket,{uid:string;roomId:string;session:string}>();const tickets=new Map<string,{uid:string;roomId:string;session:string;expires:number}>();
- async function broadcast(){for(const [socket,c] of clients){try{if(!await one('SELECT hash FROM sessions WHERE hash=? AND expires_at>?',[c.session,now()]))throw new Error('expired');const data=await snapshot(c.roomId,c.uid);if(socket.readyState===1)socket.send(JSON.stringify({type:'journey.snapshot',data}));}catch{if(socket.readyState===1)socket.send(JSON.stringify({type:'access.revoked'}));socket.close(1008,'Access revoked');clients.delete(socket);}}}
- async function cleanup(){await db.run('DELETE FROM live_locations WHERE timestamp<?',[now()-300000]);await db.run('DELETE FROM etas WHERE calculated_at<?',[now()-1800000]);await db.run('DELETE FROM grants WHERE expires_at<=?',[now()]);await db.run('DELETE FROM sessions WHERE expires_at<=?',[now()]);await db.run('UPDATE journeys SET status=? WHERE expires_at<=? AND status IN (?,?)',['expired',now(),'scheduled','active']);await db.run("DELETE FROM grants WHERE journey_id IN (SELECT id FROM journeys WHERE status NOT IN ('scheduled','active'))");await db.run('DELETE FROM invitations WHERE expires_at<=?',[now()]);for(const [key,t]of tickets)if(t.expires<=now())tickets.delete(key);}
- type Handler=(uid:string,body:any,params:any,req:FastifyRequest)=>Promise<any>;
- function endpoint(method:'GET'|'POST'|'PATCH'|'DELETE',url:string,fn:Handler,auth=true){app.route({method,url:'/api/v1'+url,config:{rateLimit:url.startsWith('/auth/')?{max:10,timeWindow:60000}:undefined},handler:async(req,reply)=>serial.use(async()=>{await db.run('BEGIN');let result;try{await cleanup();const uid=auth?await user(req):'';result=await fn(uid,req.body||{},req.params,req);await db.run('COMMIT');}catch(e){await db.run('ROLLBACK');throw e;}await broadcast();return result??{ok:true};})});}
- app.get('/health',()=>({status:'ok',version:'0.1.0',commit:process.env.BUILD_COMMIT||'development'}));
- app.get('/api/v1/capabilities',()=>({apiVersion:1,appVersion:'0.1.0',routing:!!process.env.ROUTING_URL,geocoding:!!process.env.GEOCODING_URL,transit:false,sharingMaxHours:8,backgroundTracking:false,auth:['password'],emailDelivery:false}));
- const registration=z.object({email:z.email().max(254),password:z.string().min(12).max(128),name:z.string().trim().min(1).max(80),username:z.string().regex(/^[a-z0-9_]{3,30}$/)}).strict();
- async function newSession(uid:string){const value=token();await db.run('INSERT INTO sessions(hash,user_id,expires_at,created_at) VALUES(?,?,?,?)',[hash(value),uid,now()+7*86400000,now()]);const p=await one('SELECT id,name,username FROM users WHERE id=?',[uid]);return {token:value,profile:p,expiresAt:now()+7*86400000};}
- endpoint('POST','/auth/register',async(_uid,b)=>{const v=registration.parse(b);const id=randomUUID();await db.run('INSERT INTO users(id,email,username,name,password,created_at) VALUES(?,?,?,?,?,?)',[id,v.email.toLowerCase(),v.username,v.name,await passwordHash(v.password),now()]);return newSession(id);},false);
- endpoint('POST','/auth/login',async(_uid,b)=>{const v=z.object({email:z.email().max(254),password:z.string().min(1).max(128)}).strict().parse(b);const u=await one('SELECT * FROM users WHERE email=?',[v.email.toLowerCase()]);const stored=u?.password||await passwordHash('constant dummy password');if(!await passwordMatches(v.password,stored)||!u)fail(401,'Invalid email or password');return newSession(u.id);},false);
- endpoint('POST','/auth/logout',async(_uid,_b,_p,req)=>{await db.run('DELETE FROM sessions WHERE hash=?',[hash(req.headers.authorization!.slice(7))]);});
- endpoint('POST','/auth/refresh',async(uid,_b,_p,req)=>{await db.run('DELETE FROM sessions WHERE hash=?',[hash(req.headers.authorization!.slice(7))]);return newSession(uid);});
- endpoint('GET','/me',async uid=>one('SELECT id,name,username FROM users WHERE id=?',[uid]));
- endpoint('GET','/sessions',async uid=>(await db.all('SELECT hash,created_at,expires_at FROM sessions WHERE user_id=?',[uid])).map(s=>({id:s.hash,createdAt:Number(s.created_at),expiresAt:Number(s.expires_at)})));
- endpoint('DELETE','/sessions/:id',async(uid,_b,p)=>{await db.run('DELETE FROM sessions WHERE hash=? AND user_id=?',[p.id,uid]);});
- endpoint('GET','/journeys',async uid=>{const result=[];for(const r of await db.all('SELECT journey_id FROM participants WHERE user_id=?',[uid]))result.push(await snapshot(r.journey_id,uid));return result.sort((a,b)=>b.createdAt-a.createdAt);});
- endpoint('POST','/journeys',async(uid,b)=>{const v=z.object({title:z.string().trim().min(1).max(120),description:z.string().max(1000).default(''),destination:place,mode:transport.default('walking'),expiresAt:z.number().int().min(now()+60000).max(now()+86400000).optional()}).strict().parse(b);const id=randomUUID();await db.run('INSERT INTO journeys(id,owner_id,title,description,destination,meeting_point,status,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?)',[id,uid,v.title,v.description,JSON.stringify(v.destination),null,'scheduled',now(),v.expiresAt||now()+8*3600000]);await db.run('INSERT INTO participants(journey_id,user_id,role,status,mode) VALUES(?,?,?,?,?)',[id,uid,'owner','accepted',v.mode]);return snapshot(id,uid);});
- endpoint('GET','/journeys/:id',async(uid,_b,p)=>snapshot(idSchema.parse(p).id,uid));
- endpoint('POST','/journeys/:id/start',async(uid,_b,p)=>{await openRoom(p.id,uid,true);await db.run('UPDATE journeys SET status=? WHERE id=?',['active',p.id]);return snapshot(p.id,uid);});
- for(const action of ['complete','cancel'])endpoint('POST',`/journeys/:id/${action}`,async(uid,_b,p)=>{await openRoom(p.id,uid,true);await db.run('UPDATE journeys SET status=? WHERE id=?',[action==='complete'?'completed':'cancelled',p.id]);await db.run('DELETE FROM grants WHERE journey_id=?',[p.id]);await db.run('DELETE FROM etas WHERE journey_id=?',[p.id]);await db.run('DELETE FROM invitations WHERE journey_id=?',[p.id]);return snapshot(p.id,uid);});
- endpoint('PATCH','/journeys/:id',async(uid,b,p)=>{await openRoom(p.id,uid,true);const v=z.object({title:z.string().trim().min(1).max(120).optional(),destination:place.optional()}).strict().parse(b);if(v.title)await db.run('UPDATE journeys SET title=? WHERE id=?',[v.title,p.id]);if(v.destination){await db.run('UPDATE journeys SET destination=? WHERE id=?',[JSON.stringify(v.destination),p.id]);await db.run('DELETE FROM etas WHERE journey_id=?',[p.id]);}return snapshot(p.id,uid);});
- endpoint('POST','/journeys/:id/invite',async(uid,b,p)=>{const r=await openRoom(p.id,uid,true);const v=z.object({username:z.string().max(30).optional()}).strict().parse(b);const target=v.username?await one('SELECT id FROM users WHERE username=?',[v.username]):null;if(v.username&&!target)fail(404,'User unavailable');if(target&&(await blocked(uid,target.id)||await one('SELECT user_id FROM participants WHERE journey_id=? AND user_id=?',[p.id,target.id])))fail(409,'Invitation unavailable');const invite=token();await db.run('INSERT INTO invitations(hash,journey_id,inviter_id,target_id,expires_at) VALUES(?,?,?,?,?)',[hash(invite),p.id,uid,target?.id||null,Math.min(now()+3600000,Number(r.expires_at))]);return {token:invite,expiresAt:Math.min(now()+3600000,Number(r.expires_at))};});
- endpoint('GET','/invitations',async uid=>{const rows=await db.all('SELECT i.hash AS id,i.journey_id,j.title,i.inviter_id FROM invitations i JOIN journeys j ON j.id=i.journey_id WHERE i.target_id=? AND i.used_at IS NULL AND i.expires_at>?',[uid,now()]);const out=[];for(const r of rows)if(!await blocked(uid,r.inviter_id))out.push(r);return out;});
- async function accept(uid:string,i:any){if(!i||i.used_at||Number(i.expires_at)<=now()||(i.target_id&&i.target_id!==uid))fail(404,'Invitation unavailable');const journey=await one('SELECT * FROM journeys WHERE id=?',[i.journey_id]);if(!journey||!activeStatuses.includes(journey.status)||Number(journey.expires_at)<=now())fail(409,'Journey is closed');for(const m of await db.all('SELECT user_id FROM participants WHERE journey_id=?',[i.journey_id]))if(await blocked(uid,m.user_id))fail(403,'Invitation unavailable');const count=await one('SELECT COUNT(*) AS n FROM participants WHERE journey_id=?',[i.journey_id]);if(Number(count.n)>=20)fail(409,'Room is full');await db.run('INSERT INTO participants(journey_id,user_id,role,status,mode) VALUES(?,?,?,?,?) ON CONFLICT(journey_id,user_id) DO NOTHING',[i.journey_id,uid,'participant','accepted','walking']);await db.run('UPDATE invitations SET used_at=? WHERE hash=?',[now(),i.hash]);return snapshot(i.journey_id,uid);}
- endpoint('POST','/invitations/accept',async(uid,b)=>{const v=z.object({token:z.string().min(40).max(100)}).strict().parse(b);return accept(uid,await one('SELECT * FROM invitations WHERE hash=?',[hash(v.token)]));});
- endpoint('POST','/invitations/:id/accept',async(uid,_b,p)=>accept(uid,await one('SELECT * FROM invitations WHERE hash=? AND target_id=?',[p.id,uid])));
- endpoint('POST','/invitations/:id/decline',async(uid,_b,p)=>{await db.run('DELETE FROM invitations WHERE hash=? AND target_id=?',[p.id,uid]);});
- endpoint('DELETE','/journeys/:id/invitations',async(uid,_b,p)=>{await room(p.id,uid,true);await db.run('DELETE FROM invitations WHERE journey_id=?',[p.id]);});
- async function removeMember(id:string,target:string){await db.run('DELETE FROM participants WHERE journey_id=? AND user_id=?',[id,target]);await db.run('DELETE FROM etas WHERE journey_id=? AND user_id=?',[id,target]);for(const g of await db.all('SELECT * FROM grants WHERE journey_id=?',[id]))await db.run('UPDATE grants SET viewers=? WHERE journey_id=? AND user_id=?',[JSON.stringify(JSON.parse(g.viewers).filter((v:string)=>v!==target)),id,g.user_id]);}
- endpoint('POST','/journeys/:id/leave',async(uid,_b,p)=>{const r=await room(p.id,uid);if(r.owner_id===uid)fail(409,'Organizer must end the journey before leaving');await removeMember(p.id,uid);});
- endpoint('DELETE','/journeys/:id/participants/:userId',async(uid,_b,p)=>{await room(p.id,uid,true);if(uid===p.userId)fail(409,'End the journey instead');await removeMember(p.id,p.userId);});
- endpoint('PATCH','/journeys/:id/status',async(uid,b,p)=>{await openRoom(p.id,uid);const v=z.object({status:participantStatus,mode:transport.optional(),delayMinutes:z.number().int().min(0).max(180).default(0)}).strict().parse(b);await db.run('UPDATE participants SET status=?,delay_minutes=? WHERE journey_id=? AND user_id=?',[v.status,v.delayMinutes,p.id,uid]);if(v.mode){await db.run('UPDATE participants SET mode=? WHERE journey_id=? AND user_id=?',[v.mode,p.id,uid]);await db.run('DELETE FROM etas WHERE journey_id=? AND user_id=?',[p.id,uid]);}if(v.status==='arrived'||v.status==='paused')await db.run('DELETE FROM grants WHERE journey_id=? AND user_id=?',[p.id,uid]);return snapshot(p.id,uid);});
- endpoint('POST','/journeys/:id/sharing',async(uid,b,p)=>{const r=await openRoom(p.id,uid);const v=z.object({mode:precision,expiresAt:z.number().int().min(now()+1000).max(now()+8*3600000),viewers:z.array(z.uuid()).max(19),allowMeeting:z.boolean().default(false)}).strict().parse(b);for(const viewer of v.viewers){if(!await one('SELECT user_id FROM participants WHERE journey_id=? AND user_id=?',[p.id,viewer])||viewer===uid||await blocked(uid,viewer))fail(403,'Viewer is not an authorized participant');}
- await db.run('DELETE FROM grants WHERE journey_id=? AND user_id=?',[p.id,uid]);await db.run('DELETE FROM etas WHERE journey_id=? AND user_id=?',[p.id,uid]);if(v.mode!=='off')await db.run('INSERT INTO grants(journey_id,user_id,mode,viewers,allow_meeting,expires_at) VALUES(?,?,?,?,?,?)',[p.id,uid,v.mode,JSON.stringify([...new Set(v.viewers)]),v.allowMeeting?1:0,Math.min(v.expiresAt,Number(r.expires_at))]);return snapshot(p.id,uid);});
- endpoint('DELETE','/journeys/:id/sharing',async(uid,_b,p)=>{await room(p.id,uid);await db.run('DELETE FROM grants WHERE journey_id=? AND user_id=?',[p.id,uid]);await db.run('DELETE FROM etas WHERE journey_id=? AND user_id=?',[p.id,uid]);return snapshot(p.id,uid);});
- endpoint('POST','/sharing/stop-all',async uid=>{await db.run('DELETE FROM grants WHERE user_id=?',[uid]);await db.run('DELETE FROM etas WHERE user_id=?',[uid]);});
- endpoint('GET','/privacy',async uid=>{const out=[];for(const g of await db.all('SELECT * FROM grants WHERE user_id=? AND expires_at>?',[uid,now()])){const j=await snapshot(g.journey_id,uid);out.push({journeyId:g.journey_id,title:j.title,mode:g.mode,expiresAt:Number(g.expires_at),viewers:j.participants.filter(p=>JSON.parse(g.viewers).includes(p.id)).map(p=>({id:p.id,name:p.name})),lastUpdate:j.participants.find(p=>p.id===uid)?.location?.timestamp||null});}return out;});
- endpoint('POST','/journeys/:id/location',async(uid,b,p)=>{await openRoom(p.id,uid);const v=coordinate.extend({accuracy:z.number().min(0).max(100000),timestamp:z.number().int().min(now()-120000).max(now()+10000)}).strict().parse(b);const g=await one('SELECT * FROM grants WHERE journey_id=? AND user_id=? AND expires_at>?',[p.id,uid,now()]);if(!g||!['precise','approximate'].includes(g.mode))fail(403,'No active location grant');const last=await one('SELECT timestamp FROM live_locations WHERE journey_id=? AND user_id=?',[p.id,uid]);if(last&&Number(last.timestamp)>=v.timestamp)fail(409,'Out-of-order location update');if(last&&v.timestamp-Number(last.timestamp)<3000)fail(429,'Location updates are too frequent');const fix=g.mode==='approximate'?{...coarse(v),accuracy:Math.max(1600,v.accuracy)}:v;await db.run('INSERT INTO live_locations(journey_id,user_id,latitude,longitude,accuracy,timestamp) VALUES(?,?,?,?,?,?) ON CONFLICT(journey_id,user_id) DO UPDATE SET latitude=excluded.latitude,longitude=excluded.longitude,accuracy=excluded.accuracy,timestamp=excluded.timestamp',[p.id,uid,fix.latitude,fix.longitude,fix.accuracy,v.timestamp]);return {accepted:true,timestamp:v.timestamp};});
- endpoint('POST','/routes/calculate',async(uid,b)=>{const v=z.object({origin:coordinate,destination:coordinate,mode:transport}).strict().parse(b);return geo.route(v.origin,v.destination,v.mode);});
- endpoint('GET','/places/search',async(_uid,_b,_p,req)=>{const q=z.object({q:z.string().trim().min(3).max(200)}).strict().parse(req.query);return geo.search(q.q);});
- endpoint('POST','/journeys/:id/eta',async(uid,b,p)=>{const r=await openRoom(p.id,uid);const v=z.object({origin:coordinate.optional(),arrival:z.number().int().min(now()).max(now()+86400000).optional()}).strict().parse(b);const g=await one('SELECT * FROM grants WHERE journey_id=? AND user_id=? AND expires_at>?',[p.id,uid,now()]);if(!g||!['eta','precise','approximate'].includes(g.mode))fail(403,'Choose ETA or location sharing first');const member=await one('SELECT * FROM participants WHERE journey_id=? AND user_id=?',[p.id,uid]);let arrival:number,source:string;if(v.origin){const route=await geo.route(v.origin,JSON.parse(r.destination),member.mode);arrival=now()+route.durationSeconds*1000+member.delay_minutes*60000;source='routing';}else if(v.arrival){arrival=v.arrival;source='manual';}else return fail(400,'Provide an origin or manual arrival estimate');if(g.mode!=='precise')arrival=Math.ceil(arrival/300000)*300000;await db.run('INSERT INTO etas VALUES(?,?,?,?,?) ON CONFLICT(journey_id,user_id) DO UPDATE SET arrival=excluded.arrival,calculated_at=excluded.calculated_at,source=excluded.source',[p.id,uid,arrival,now(),source]);return snapshot(p.id,uid);});
- endpoint('POST','/journeys/:id/meeting-points/suggest',async(uid,b,p)=>{const r=await openRoom(p.id,uid);const v=z.object({candidates:z.array(place).min(1).max(5),optimization:z.enum(['total','latest','balanced']).default('latest')}).strict().parse(b);const s=await snapshot(p.id,uid);const eligible=[];for(const person of s.participants){const g=await one('SELECT allow_meeting FROM grants WHERE journey_id=? AND user_id=?',[p.id,person.id]);if(person.location&&!person.location.stale&&person.sharing==='precise'&&Number(g?.allow_meeting)===1)eligible.push(person);}if(eligible.length<2)fail(409,'Two fresh, authorized precise origins are required. Participants may propose a point manually.');const results=[];for(const c of v.candidates){const durations=[];for(const person of eligible){const route=await geo.route(person.location!,c,person.mode);durations.push(route.durationSeconds);}results.push({id:JSON.stringify(c),durations,place:c});}return rankMeetingPoints(results,v.optimization).map(x=>({...x,safety:'User-provided candidate; public access and safety need confirmation',coverage:`${eligible.length} authorized participants`,estimated:true}));});
- endpoint('POST','/journeys/:id/meeting-points',async(uid,b,p)=>{await openRoom(p.id,uid);const v=z.object({place}).strict().parse(b);const id=randomUUID();await db.run('INSERT INTO proposals VALUES(?,?,?,?)',[id,p.id,uid,JSON.stringify(v.place)]);return snapshot(p.id,uid);});
- endpoint('POST','/journeys/:id/meeting-points/:proposalId/confirm',async(uid,_b,p)=>{await openRoom(p.id,uid,true);const proposal=await one('SELECT * FROM proposals WHERE id=? AND journey_id=?',[p.proposalId,p.id]);if(!proposal)fail(404,'Proposal unavailable');await db.run('UPDATE journeys SET meeting_point=? WHERE id=?',[proposal.place,p.id]);return snapshot(p.id,uid);});
- endpoint('POST','/journeys/:id/messages',async(uid,b,p)=>{await openRoom(p.id,uid);const v=z.object({body:z.string().trim().min(1).max(1000)}).strict().parse(b);await db.run('INSERT INTO messages VALUES(?,?,?,?,?)',[randomUUID(),p.id,uid,v.body,now()]);return snapshot(p.id,uid);});
- endpoint('DELETE','/journeys/:id/messages/:messageId',async(uid,_b,p)=>{const r=await room(p.id,uid);await db.run('DELETE FROM messages WHERE journey_id=? AND id=? AND (sender_id=? OR ?=?)',[p.id,p.messageId,uid,r.owner_id,uid]);});
- endpoint('GET','/users/search',async(uid,_b,_p,req)=>{const {q}=z.object({q:z.string().regex(/^[a-z0-9_]{3,30}$/)}).parse(req.query);const out=[];for(const u of await db.all('SELECT id,name,username FROM users WHERE username LIKE ? AND id<>? LIMIT 10',[q+'%',uid]))if(!await blocked(uid,u.id))out.push(u);return out;});
- endpoint('GET','/friends',async uid=>{const result=[];for(const f of await db.all('SELECT f.*,u.name,u.username FROM friendships f JOIN users u ON u.id=CASE WHEN f.sender_id=? THEN f.target_id ELSE f.sender_id END WHERE f.sender_id=? OR f.target_id=?',[uid,uid,uid]))if(!await blocked(uid,f.sender_id===uid?f.target_id:f.sender_id))result.push(f);return result;});
- endpoint('POST','/friends/requests',async(uid,b)=>{const {username}=z.object({username:z.string().max(30)}).strict().parse(b);const u=await one('SELECT id FROM users WHERE username=?',[username]);if(!u||u.id===uid||await blocked(uid,u.id))fail(404,'User unavailable');const existing=await one('SELECT id FROM friendships WHERE (sender_id=? AND target_id=?) OR (sender_id=? AND target_id=?)',[uid,u.id,u.id,uid]);if(existing)fail(409,'A relationship already exists');await db.run('INSERT INTO friendships VALUES(?,?,?,?,?)',[randomUUID(),uid,u.id,'pending',now()]);});
- endpoint('POST','/friends/requests/:id/accept',async(uid,_b,p)=>{const f=await one('SELECT * FROM friendships WHERE id=? AND target_id=?',[p.id,uid]);if(!f||await blocked(uid,f.sender_id))fail(404,'Request unavailable');await db.run('UPDATE friendships SET status=? WHERE id=?',['accepted',p.id]);});
- endpoint('DELETE','/friends/:id',async(uid,_b,p)=>{await db.run('DELETE FROM friendships WHERE id=? AND (sender_id=? OR target_id=?)',[p.id,uid,uid]);});
- endpoint('POST','/blocks',async(uid,b)=>{const {userId}=z.object({userId:z.uuid()}).strict().parse(b);if(userId===uid)fail(400,'Cannot block yourself');await db.run('INSERT INTO blocks VALUES(?,?) ON CONFLICT DO NOTHING',[uid,userId]);await db.run('DELETE FROM friendships WHERE (sender_id=? AND target_id=?) OR (sender_id=? AND target_id=?)',[uid,userId,userId,uid]);await db.run('DELETE FROM invitations WHERE (inviter_id=? AND target_id=?) OR (inviter_id=? AND target_id=?)',[uid,userId,userId,uid]);for(const g of await db.all('SELECT * FROM grants WHERE user_id=? OR user_id=?',[uid,userId])){const denied=g.user_id===uid?userId:uid;await db.run('UPDATE grants SET viewers=? WHERE journey_id=? AND user_id=?',[JSON.stringify(JSON.parse(g.viewers).filter((v:string)=>v!==denied)),g.journey_id,g.user_id]);}});
- endpoint('POST','/reports',async(uid,b)=>{const v=z.object({userId:z.uuid(),reason:z.string().trim().min(5).max(2000)}).strict().parse(b);await db.run('INSERT INTO reports VALUES(?,?,?,?,?)',[randomUUID(),uid,v.userId,v.reason,now()]);return {received:true,notice:'Stored for this instance administrator; Pathway is not an emergency service.'};});
- endpoint('GET','/saved-places',async uid=>(await db.all('SELECT * FROM saved_places WHERE user_id=?',[uid])).map(p=>({id:p.id,place:JSON.parse(p.place)})));
- endpoint('POST','/saved-places',async(uid,b)=>{const v=place.parse(b);await db.run('INSERT INTO saved_places VALUES(?,?,?)',[randomUUID(),uid,JSON.stringify(v)]);});
- endpoint('DELETE','/saved-places/:id',async(uid,_b,p)=>{await db.run('DELETE FROM saved_places WHERE id=? AND user_id=?',[p.id,uid]);});
- endpoint('DELETE','/history',async uid=>{for(const j of await db.all("SELECT j.id,j.owner_id FROM journeys j JOIN participants p ON p.journey_id=j.id WHERE p.user_id=? AND j.status NOT IN ('active','scheduled')",[uid])){if(j.owner_id===uid)await db.run('DELETE FROM journeys WHERE id=?',[j.id]);else await removeMember(j.id,uid);}});
- endpoint('DELETE','/account',async(uid,b)=>{const v=z.object({password:z.string().max(128)}).strict().parse(b);const u=await one('SELECT password FROM users WHERE id=?',[uid]);if(!await passwordMatches(v.password,u.password))fail(403,'Password confirmation failed');await db.run('DELETE FROM journeys WHERE owner_id=?',[uid]);await db.run('DELETE FROM invitations WHERE inviter_id=? OR target_id=?',[uid,uid]);await db.run('DELETE FROM messages WHERE sender_id=?',[uid]);await db.run('DELETE FROM proposals WHERE proposer=?',[uid]);await db.run('DELETE FROM reports WHERE reporter_id=? OR target_id=?',[uid,uid]);await db.run('DELETE FROM users WHERE id=?',[uid]);});
- endpoint('POST','/journeys/:id/ws-ticket',async(uid,_b,p,req)=>{await room(p.id,uid);const key=token();tickets.set(hash(key),{uid,roomId:p.id,session:hash(req.headers.authorization!.slice(7)),expires:now()+30000});return {ticket:key};});
- app.get('/api/v1/live',{websocket:true},(socket,req)=>{const timer=setTimeout(()=>socket.close(1008,'Authentication required'),5000);let initialized=false;socket.on('message',raw=>{void serial.use(async()=>{try{if(initialized)throw Error();const message=z.object({ticket:z.string().min(40).max(100)}).strict().parse(JSON.parse(raw.toString()));const t=tickets.get(hash(message.ticket));tickets.delete(hash(message.ticket));if(!t||t.expires<=now()||!await one('SELECT hash FROM sessions WHERE hash=? AND expires_at>?',[t.session,now()]))throw Error();await room(t.roomId,t.uid);initialized=true;clearTimeout(timer);clients.set(socket,{uid:t.uid,roomId:t.roomId,session:t.session});socket.send(JSON.stringify({type:'journey.snapshot',data:await snapshot(t.roomId,t.uid)}));}catch{socket.close(1008,'Unauthorized');}});});socket.on('close',()=>{clearTimeout(timer);clients.delete(socket);});});
- const timer=setInterval(()=>{void serial.use(async()=>{await cleanup();await broadcast();}).catch(()=>{});},10000);timer.unref();
- app.addHook('onClose',async()=>{clearInterval(timer);for(const s of clients.keys())s.close(1001,'Server stopping');await db.close();});
- return {app,maintenance:()=>serial.use(async()=>{await cleanup();await broadcast();})};
+import { randomUUID } from 'node:crypto';
+import { z, ZodError } from 'zod';
+import { Serial, type Database, migrate } from './db.js';
+import { hash, token, passwordHash, passwordMatches } from './auth.js';
+import { providers, type Providers } from './providers.js';
+import {
+  coordinate,
+  place,
+  transport,
+  precision,
+  participantStatus,
+  type Journey,
+  type Participant,
+} from '../../../packages/shared/src/index.js';
+import { coarse, rankMeetingPoints } from '../../../packages/geospatial/src/index.js';
+import type { WebSocket } from 'ws';
+export async function createApp(config: {
+  db: Database;
+  providers?: Providers;
+  now?: () => number;
+  origins?: string[];
+  production?: boolean;
+}) {
+  const db = config.db,
+    now = config.now || Date.now,
+    serial = new Serial();
+  await migrate(db);
+  const geo =
+    config.providers ||
+    providers({
+      routingUrl: process.env.ROUTING_URL,
+      geocodingUrl: process.env.GEOCODING_URL,
+      contact: process.env.PROVIDER_CONTACT,
+    });
+  const app = Fastify({ logger: false, bodyLimit: 32768, trustProxy: false });
+  await app.register(cors, {
+    origin: config.origins || ['http://localhost:8081', 'http://localhost:4173'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  });
+  await app.register(helmet);
+  await app.register(rateLimit, { max: 120, timeWindow: 60000 });
+  await app.register(websocket, { options: { maxPayload: 1024 } });
+  app.setErrorHandler((error, _req, reply) => {
+    const e = error as Error & { statusCode?: number; code?: string };
+    const status =
+      e instanceof ZodError
+        ? 400
+        : e.statusCode ||
+          (e.code === '23505' ||
+          e.code?.startsWith('SQLITE_CONSTRAINT') ||
+          e.message.includes('UNIQUE constraint failed')
+            ? 409
+            : 500);
+    reply.code(status).send({
+      error:
+        status === 500
+          ? 'Internal server error'
+          : e instanceof ZodError
+            ? 'Invalid request'
+            : status === 409
+              ? 'A conflicting record already exists'
+              : e.message,
+    });
+  });
+  app.addHook('onSend', async (_req, reply, payload) => {
+    reply.header('Cache-Control', 'no-store');
+    return payload;
+  });
+  const one = async (sql: string, p: any[] = []) => (await db.all(sql, p))[0];
+  async function user(req: FastifyRequest) {
+    const bearer = req.headers.authorization?.match(/^Bearer (\S+)$/)?.[1];
+    if (!bearer) fail(401, 'Sign in required');
+    const s = await one('SELECT user_id, hash FROM sessions WHERE hash=? AND expires_at>?', [
+      hash(bearer!),
+      now(),
+    ]);
+    if (!s) fail(401, 'Session expired');
+    return s.user_id as string;
+  }
+  async function blocked(a: string, b: string) {
+    return !!(await one(
+      'SELECT owner_id FROM blocks WHERE (owner_id=? AND target_id=?) OR (owner_id=? AND target_id=?)',
+      [a, b, b, a],
+    ));
+  }
+  async function room(id: string, uid: string, owner = false) {
+    const r = await one(
+      'SELECT j.*,p.role FROM journeys j JOIN participants p ON p.journey_id=j.id WHERE j.id=? AND p.user_id=?',
+      [id, uid],
+    );
+    if (!r) fail(404, 'Journey unavailable');
+    if (owner && r.owner_id !== uid) fail(403, 'Only the organizer can do that');
+    return r;
+  }
+  async function openRoom(id: string, uid: string, owner = false) {
+    const r = await room(id, uid, owner);
+    if (!activeStatuses.includes(r.status) || Number(r.expires_at) <= now())
+      fail(409, 'Journey is no longer open');
+    return r;
+  }
+  async function snapshot(id: string, uid: string): Promise<Journey> {
+    const r = await room(id, uid);
+    const members = await db.all(
+      'SELECT p.*,u.name FROM participants p JOIN users u ON u.id=p.user_id WHERE p.journey_id=?',
+      [id],
+    );
+    const participants: Participant[] = [];
+    let myGrant: Journey['myGrant'];
+    for (const p of members) {
+      if (p.user_id !== uid && (await blocked(uid, p.user_id))) continue;
+      const grant = await one(
+        'SELECT * FROM grants WHERE journey_id=? AND user_id=? AND expires_at>?',
+        [id, p.user_id, now()],
+      );
+      const can =
+        activeStatuses.includes(r.status) &&
+        Number(r.expires_at) > now() &&
+        grant &&
+        (p.user_id === uid || JSON.parse(grant.viewers).includes(uid));
+      const item: Participant = {
+        id: p.user_id,
+        name: p.name,
+        role: p.role,
+        status: p.status,
+        mode: p.mode,
+        delayMinutes: p.delay_minutes,
+        sharing: can ? grant.mode : 'off',
+      };
+      if (can) {
+        item.expiresAt = Number(grant.expires_at);
+        if (p.user_id === uid)
+          myGrant = {
+            mode: grant.mode,
+            expiresAt: Number(grant.expires_at),
+            viewers: JSON.parse(grant.viewers),
+          };
+        if (['precise', 'approximate'].includes(grant.mode)) {
+          const fix = await one(
+            'SELECT * FROM live_locations WHERE journey_id=? AND user_id=? AND timestamp>?',
+            [id, p.user_id, now() - 300000],
+          );
+          if (fix)
+            item.location = {
+              latitude: fix.latitude,
+              longitude: fix.longitude,
+              accuracy: fix.accuracy,
+              timestamp: Number(fix.timestamp),
+              stale: now() - Number(fix.timestamp) > 60000,
+            };
+        }
+        const eta = await one('SELECT * FROM etas WHERE journey_id=? AND user_id=?', [
+          id,
+          p.user_id,
+        ]);
+        if (eta && ['eta', 'precise', 'approximate'].includes(grant.mode))
+          item.eta = {
+            arrival: Number(eta.arrival),
+            calculatedAt: Number(eta.calculated_at),
+            source: eta.source,
+            stale: now() - Number(eta.calculated_at) > 300000,
+          };
+      }
+      participants.push(item);
+    }
+    const messages = [];
+    for (const m of await db.all(
+      'SELECT m.*,u.name FROM messages m JOIN users u ON u.id=m.sender_id WHERE journey_id=? ORDER BY created_at DESC LIMIT 100',
+      [id],
+    ))
+      if (!(await blocked(uid, m.sender_id)))
+        messages.push({
+          id: m.id,
+          senderId: m.sender_id,
+          name: m.name,
+          body: m.body,
+          createdAt: Number(m.created_at),
+        });
+    const proposals = [];
+    for (const p of await db.all('SELECT * FROM proposals WHERE journey_id=?', [id]))
+      if (!(await blocked(uid, p.proposer)))
+        proposals.push({ id: p.id, place: JSON.parse(p.place), proposer: p.proposer });
+    const etas = participants
+      .filter((p) => p.status !== 'arrived')
+      .map((p) => p.eta)
+      .filter((e) => e && !e.stale);
+    return {
+      id: r.id,
+      title: r.title,
+      description: r.description,
+      destination: JSON.parse(r.destination),
+      meetingPoint: r.meeting_point ? JSON.parse(r.meeting_point) : null,
+      status: r.status,
+      createdAt: Number(r.created_at),
+      expiresAt: Number(r.expires_at),
+      ownerId: r.owner_id,
+      participants,
+      messages: messages.reverse(),
+      proposals,
+      myGrant,
+      groupArrival: etas.length ? Math.max(...etas.map((e) => e!.arrival)) : null,
+      groupEtaComplete: participants.every(
+        (p) => p.status === 'arrived' || (p.eta && !p.eta.stale),
+      ),
+    };
+  }
+  const clients = new Map<WebSocket, { uid: string; roomId: string; session: string }>();
+  const tickets = new Map<
+    string,
+    { uid: string; roomId: string; session: string; expires: number }
+  >();
+  async function broadcast() {
+    for (const [socket, c] of clients) {
+      try {
+        if (
+          !(await one('SELECT hash FROM sessions WHERE hash=? AND expires_at>?', [
+            c.session,
+            now(),
+          ]))
+        )
+          throw new Error('expired');
+        const data = await snapshot(c.roomId, c.uid);
+        if (socket.readyState === 1)
+          socket.send(JSON.stringify({ type: 'journey.snapshot', data }));
+      } catch {
+        if (socket.readyState === 1) socket.send(JSON.stringify({ type: 'access.revoked' }));
+        socket.close(1008, 'Access revoked');
+        clients.delete(socket);
+      }
+    }
+  }
+  async function cleanup() {
+    await db.run('DELETE FROM live_locations WHERE timestamp<?', [now() - 300000]);
+    await db.run('DELETE FROM etas WHERE calculated_at<?', [now() - 1800000]);
+    await db.run('DELETE FROM grants WHERE expires_at<=?', [now()]);
+    await db.run('DELETE FROM sessions WHERE expires_at<=?', [now()]);
+    await db.run('UPDATE journeys SET status=? WHERE expires_at<=? AND status IN (?,?)', [
+      'expired',
+      now(),
+      'scheduled',
+      'active',
+    ]);
+    await db.run(
+      "DELETE FROM grants WHERE journey_id IN (SELECT id FROM journeys WHERE status NOT IN ('scheduled','active'))",
+    );
+    await db.run('DELETE FROM invitations WHERE expires_at<=?', [now()]);
+    for (const [key, t] of tickets) if (t.expires <= now()) tickets.delete(key);
+  }
+  type Handler = (uid: string, body: any, params: any, req: FastifyRequest) => Promise<any>;
+  function endpoint(
+    method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+    url: string,
+    fn: Handler,
+    auth = true,
+  ) {
+    app.route({
+      method,
+      url: '/api/v1' + url,
+      config: { rateLimit: url.startsWith('/auth/') ? { max: 10, timeWindow: 60000 } : undefined },
+      handler: async (req) => {
+        async function transaction(operation: Handler) {
+          return serial.use(async () => {
+            await db.run('BEGIN');
+            let result;
+            try {
+              await cleanup();
+              const uid = auth ? await user(req) : '';
+              result = await operation(uid, req.body || {}, req.params, req);
+              await db.run('COMMIT');
+            } catch (error) {
+              await db.run('ROLLBACK');
+              throw error;
+            }
+            await broadcast();
+            return result ?? { ok: true };
+          });
+        }
+        const prepared = await transaction(fn);
+        if (prepared?.kind === REMOTE) {
+          const value = await prepared.work();
+          return transaction(async () => prepared.finish(value));
+        }
+        return prepared;
+      },
+    });
+  }
+  app.get('/health', () => ({
+    status: 'ok',
+    version: '0.1.0',
+    commit: process.env.BUILD_COMMIT || 'development',
+  }));
+  app.get('/api/v1/capabilities', () => ({
+    apiVersion: 1,
+    appVersion: '0.1.0',
+    routing: !!process.env.ROUTING_URL,
+    geocoding: !!process.env.GEOCODING_URL,
+    transit: false,
+    sharingMaxHours: 8,
+    backgroundTracking: false,
+    auth: ['password'],
+    emailDelivery: false,
+  }));
+  async function removeMember(id: string, target: string) {
+    await db.run('DELETE FROM participants WHERE journey_id=? AND user_id=?', [id, target]);
+    await db.run('DELETE FROM etas WHERE journey_id=? AND user_id=?', [id, target]);
+    for (const g of await db.all('SELECT * FROM grants WHERE journey_id=?', [id]))
+      await db.run('UPDATE grants SET viewers=? WHERE journey_id=? AND user_id=?', [
+        JSON.stringify(JSON.parse(g.viewers).filter((v: string) => v !== target)),
+        id,
+        g.user_id,
+      ]);
+  }
+  const context = { db, one, now, endpoint, room, openRoom, blocked, snapshot, geo, removeMember };
+  registerAccounts(context);
+  registerJourneys(context);
+  registerSharing(context);
+  registerCoordination(context);
+  registerSocial(context);
+  endpoint('POST', '/journeys/:id/ws-ticket', async (uid, _b, p, req) => {
+    await room(p.id, uid);
+    const key = token();
+    tickets.set(hash(key), {
+      uid,
+      roomId: p.id,
+      session: hash(req.headers.authorization!.slice(7)),
+      expires: now() + 30000,
+    });
+    return { ticket: key };
+  });
+  app.get('/api/v1/live', { websocket: true }, (socket, req) => {
+    const timer = setTimeout(() => socket.close(1008, 'Authentication required'), 5000);
+    let initialized = false;
+    socket.on('message', (raw) => {
+      void serial.use(async () => {
+        try {
+          if (initialized) throw Error();
+          const message = z
+            .object({ ticket: z.string().min(40).max(100) })
+            .strict()
+            .parse(JSON.parse(raw.toString()));
+          const t = tickets.get(hash(message.ticket));
+          tickets.delete(hash(message.ticket));
+          if (
+            !t ||
+            t.expires <= now() ||
+            !(await one('SELECT hash FROM sessions WHERE hash=? AND expires_at>?', [
+              t.session,
+              now(),
+            ]))
+          )
+            throw Error();
+          await room(t.roomId, t.uid);
+          initialized = true;
+          clearTimeout(timer);
+          clients.set(socket, { uid: t.uid, roomId: t.roomId, session: t.session });
+          socket.send(
+            JSON.stringify({ type: 'journey.snapshot', data: await snapshot(t.roomId, t.uid) }),
+          );
+        } catch {
+          socket.close(1008, 'Unauthorized');
+        }
+      });
+    });
+    socket.on('close', () => {
+      clearTimeout(timer);
+      clients.delete(socket);
+    });
+  });
+  const timer = setInterval(() => {
+    void serial
+      .use(async () => {
+        await cleanup();
+        await broadcast();
+      })
+      .catch(() => {});
+  }, 10000);
+  timer.unref();
+  app.addHook('onClose', async () => {
+    clearInterval(timer);
+    for (const s of clients.keys()) s.close(1001, 'Server stopping');
+    await db.close();
+  });
+  return {
+    app,
+    maintenance: () =>
+      serial.use(async () => {
+        await cleanup();
+        await broadcast();
+      }),
+  };
 }

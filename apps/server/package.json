@@ -1,1 +1,25 @@
-{"name":"@pathway/server","version":"0.1.0","private":true,"license":"AGPL-3.0-only","type":"module","scripts":{"dev":"tsx watch src/index.ts","start":"node ../../dist/apps/server/src/index.js"},"dependencies":{"fastify":"^5.12.8","@fastify/cors":"^11.0.0","@fastify/helmet":"^13.0.0","@fastify/rate-limit":"^10.0.0","@fastify/websocket":"^11.0.0","pg":"^8.16.0","zod":"^4.0.0","ws":"^8.18.0"},"devDependencies":{"@types/pg":"^8.15.0","@types/ws":"^8.18.0"}}
+{
+  "name": "@pathway/server",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node ../../dist/apps/server/src/index.js"
+  },
+  "dependencies": {
+    "fastify": "^5.12.8",
+    "@fastify/cors": "^11.0.0",
+    "@fastify/helmet": "^13.0.0",
+    "@fastify/rate-limit": "^10.0.0",
+    "@fastify/websocket": "^11.0.0",
+    "pg": "^8.16.0",
+    "zod": "^4.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.0",
+    "@types/ws": "^8.18.0"
+  }
+}

@@ -1,1 +1,14 @@
-{"compilerOptions":{"target":"ES2023","module":"NodeNext","moduleResolution":"NodeNext","strict":true,"esModuleInterop":true,"skipLibCheck":true,"resolveJsonModule":true,"outDir":"dist","rootDir":"."},"include":["apps/server/src/**/*.ts","apps/server/test/**/*.ts","packages/**/*.ts"]}
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "outDir": "dist",
+    "rootDir": "."
+  },
+  "include": ["apps/server/src/**/*.ts", "apps/server/test/**/*.ts", "packages/**/*.ts"]
+}
