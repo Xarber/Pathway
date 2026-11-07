@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Pathway, different paths meeting at one point">
+<defs><linearGradient id="brand-gradient" x2=".8" y2="1"><stop stop-color="#858AFF"/><stop offset="1" stop-color="#5158DC"/></linearGradient></defs>
+<g id="background"><rect width="1024" height="1024" rx="230" fill="url(#brand-gradient)"/></g>
+<g id="paths" fill="none" stroke="#FFF" stroke-width="74" stroke-linecap="round" stroke-linejoin="round"><path id="left-path" d="M318 718V596q0-84 95-84h99V320"/><path id="right-path" d="M706 718V596q0-84-95-84h-99"/></g>
+<g id="destination"><circle cx="512" cy="308" r="106" fill="#FFF"/><circle cx="512" cy="308" r="38" fill="#6269F5"/></g>
+<g id="starting-points" fill="#DDDFFF"><circle cx="318" cy="738" r="44"/><circle cx="706" cy="738" r="44"/></g>
+</svg>
