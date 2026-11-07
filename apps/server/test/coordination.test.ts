@@ -603,3 +603,21 @@ await test('consented meeting ranking and group ETA are grounded in provider res
     await f.close();
   }
 });
+
+await test('routing ETA timestamps remain integer milliseconds for PostgreSQL', async () => {
+  const f = await fixture();
+  try {
+    await f.joinBob();
+    await f.share('precise');
+    f.routeFixture.durationSeconds = 600.1234;
+    const result = await f.call('/journeys/' + f.id + '/eta', f.alice.token, {
+      origin: { latitude: raw.latitude, longitude: raw.longitude },
+    });
+    assert.equal(result.status, 200);
+    const eta = result.data.participants.find((p: any) => p.id === f.alice.profile.id).eta;
+    assert.ok(Number.isInteger(eta.arrival));
+    assert.equal(eta.arrival, f.clock() + 600123);
+  } finally {
+    await f.close();
+  }
+});

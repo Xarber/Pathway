@@ -14,7 +14,7 @@ macOS arm64; Node 24.14.0; npm 11.9.0; TypeScript 5.9.3; Expo 58.0.23; React Nat
 
 | Check | Result | Evidence and boundary |
 |---|---|---|
-| Automated unit/API/WS tests | Passed: 24 tests | Real local HTTP and socket clients; isolated SQLite databases; provider fixtures explicitly labelled |
+| Automated unit/API/WS tests | Passed: 25 tests | Real local HTTP and socket clients; isolated SQLite databases; provider fixtures explicitly labelled |
 | TypeScript | Passed | Root server/shared and strict Expo app checks |
 | Compiled server | Passed | tsc build plus compiled in-memory API health smoke |
 | Production web export | Passed | Static routes, generated SDK 58 scripts/styles and PWA shell |
@@ -48,6 +48,7 @@ Unauthorized reads and socket ticket requests; accepting before membership; targ
 - Provider I/O initially held the SQL transaction: split preparation/work/finalization and revalidate consent, allowing immediate revocation while routing is slow.
 - Navigation retained the previous form's scroll position: reset scrolling on user, tab and selected-room changes; inspected the corrected mobile Home screenshot.
 - Unknown native location accuracy could become zero: suppress unknown-accuracy fixes rather than claiming perfect precision.
+- Fractional provider durations could produce a non-integer PostgreSQL BIGINT ETA: round to milliseconds and cover it with a regression test.
 - Native ScrollView's current ref type differs from older React Native classes: use the component-ref type; include Node test types for pure client module tests.
 
 ## Remaining release gates

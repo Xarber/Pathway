@@ -78,7 +78,7 @@ export function registerCoordination(ctx: RouteContext) {
         if (journey.destination !== r.destination)
           fail(409, 'Destination changed during calculation');
         let arrival = route
-          ? now() + route.durationSeconds * 1000 + member.delay_minutes * 60000
+          ? now() + Math.round(route.durationSeconds * 1000) + member.delay_minutes * 60000
           : v.arrival!;
         if (g.mode !== 'precise') arrival = Math.ceil(arrival / 300000) * 300000;
         await db.run(
