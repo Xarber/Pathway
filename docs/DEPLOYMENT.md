@@ -1,5 +1,7 @@
 # Self-hosting and rollback
 
+Pathway uses [X-Center](XCENTER.md) as the default hosting target.
+
 The API and production web export can be self-hosted; native binaries connect to a compatible instance selected in Settings. The operator is trusted with credentials and explicitly shared data. Only API v1 is accepted by the client. No hosted server was deployed in this session.
 
 ## Compose

@@ -1,0 +1,31 @@
+name: Prepare X-Center staging
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_API_URL: ${{ vars.PATHWAY_STAGING_API_URL }}
+      EXPO_PUBLIC_BUILD_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 24, cache: npm}
+      - name: Require an explicit private staging origin
+        run: |
+          test -n "$EXPO_PUBLIC_API_URL" || { echo 'Configure PATHWAY_STAGING_API_URL first'; exit 1; }
+          case "$EXPO_PUBLIC_API_URL" in https://*) ;; *) echo 'Private staging requires an HTTPS origin'; exit 1;; esac
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run export:web
+      - run: node scripts/xcenter-package.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pathway-X-Center-staging-${{ github.sha }}
+          path: |
+            artifacts/xcenter/
+            apps/mobile/dist/
+# This workflow prepares artifacts only. It does not alter X-Center, DNS, TLS or live services.

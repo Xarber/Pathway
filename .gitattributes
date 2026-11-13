@@ -1,3 +1,7 @@
 * text=auto eol=lf
 *.png binary
 *.jpg binary
+
+# Repository feedback is private data, not deployment source.
+docs/IDEAS.json export-ignore
+docs/IDEAS.md export-ignore

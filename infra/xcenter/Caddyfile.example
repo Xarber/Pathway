@@ -1,0 +1,13 @@
+# Optional local-only proxy fragment; not installed or activated automatically.
+# An operator must configure the existing X-Center TLS/auth/VPN layer separately.
+http://127.0.0.1:3182 {
+  handle /api/* {
+    reverse_proxy 127.0.0.1:3181
+  }
+  handle /health {
+    reverse_proxy 127.0.0.1:3181
+  }
+  handle {
+    reverse_proxy 127.0.0.1:3180
+  }
+}

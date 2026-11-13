@@ -1,0 +1,52 @@
+# Isolated private staging only. No public ports or external shared networks.
+name: pathway-staging
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_DB: pathway
+      POSTGRES_USER: pathway
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a unique URL-safe staging password}
+    volumes: [pathway-staging-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U pathway -d pathway]
+      interval: 5s
+      retries: 10
+    mem_limit: 1g
+    restart: unless-stopped
+  api:
+    build: {context: ../.., dockerfile: infra/Dockerfile}
+    environment:
+      DATABASE_URL: postgres://pathway:${POSTGRES_PASSWORD}@db:5432/pathway
+      CORS_ORIGINS: ${PATHWAY_STAGING_ORIGIN:?Set the private staging web origin}
+      BUILD_COMMIT: ${BUILD_COMMIT:?Set the exact staged commit}
+      ROUTING_URL: ${ROUTING_URL:-}
+      GEOCODING_URL: ${GEOCODING_URL:-}
+      PROVIDER_CONTACT: ${PROVIDER_CONTACT:-}
+    ports: ['127.0.0.1:${PATHWAY_STAGING_API_PORT:-3181}:3001']
+    depends_on: {db: {condition: service_healthy}}
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    mem_limit: 512m
+    restart: unless-stopped
+  web:
+    image: node:24-bookworm-slim
+    user: node
+    working_dir: /app
+    command: [node, /app/serve-web.mjs]
+    environment: {HOST: 0.0.0.0, PORT: 8080, PATHWAY_WEB_ROOT: /app/web}
+    ports: ['127.0.0.1:${PATHWAY_STAGING_WEB_PORT:-3180}:8080']
+    volumes:
+      - ../../apps/mobile/dist:/app/web:ro
+      - ../../scripts/serve-web.mjs:/app/serve-web.mjs:ro
+    read_only: true
+    cap_drop: [ALL]
+    mem_limit: 128m
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8080/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+    restart: unless-stopped
+volumes:
+  pathway-staging-data:
