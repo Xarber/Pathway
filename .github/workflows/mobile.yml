@@ -14,7 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: {node-version: 24, cache: npm}
+        with: { node-version: 24, cache: npm }
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
@@ -24,22 +24,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {variant: ios-unsigned, runner: macos-latest}
-          - {variant: ios-simulator, runner: macos-latest}
-          - {variant: android-apk, runner: ubuntu-latest}
-          - {variant: android-aab, runner: ubuntu-latest}
+          - { variant: ios-unsigned, runner: macos-latest }
+          - { variant: ios-simulator, runner: macos-latest }
+          - { variant: android-apk, runner: ubuntu-latest }
+          - { variant: android-aab, runner: ubuntu-latest }
     runs-on: ${{ matrix.runner }}
     env:
-      EXPO_PUBLIC_API_URL: ${{ vars.PATHWAY_API_URL }}
+      EXPO_PUBLIC_API_URL: ${{ vars.PATHWAY_API_URL || 'https://pathway.xcenter.it' }}
+      EXPO_PUBLIC_DISTRIBUTION: production
+      EXPO_PUBLIC_BUILD_COMMIT: ${{ github.sha }}
       GOOGLE_MAPS_ANDROID_KEY: ${{ secrets.GOOGLE_MAPS_ANDROID_KEY }}
       RELEASE_CHANNEL: ${{ github.ref_name == 'main' && 'stable' || 'beta' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: {node-version: 24, cache: npm}
+        with: { node-version: 24, cache: npm }
       - uses: actions/setup-java@v4
         if: startsWith(matrix.variant, 'android')
-        with: {distribution: temurin, java-version: 17}
+        with: { distribution: temurin, java-version: 17 }
       - uses: android-actions/setup-android@v3
         if: startsWith(matrix.variant, 'android')
       - run: npm ci

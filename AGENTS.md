@@ -6,7 +6,7 @@ Read `docs/INDEX.md`, `docs/ARCHITECTURE.md`, `docs/FEATURES.md`, `docs/reports/
 
 - Node 24, npm workspaces, Expo SDK 58. Match native dependencies using `npx expo install --check` in `apps/mobile`.
 - Development happens on `testing` or isolated feature branches. Conventional Commits. Promote `testing → beta → main` only after channel-appropriate validation.
-- No automatic full builds on testing. CI checks are manual. Beta/main build workflows do not publish releases; no publication channels are authorized.
+- No automatic full builds on testing. CI checks are manual. Beta/main build workflows do not publish releases; public source and X-Center web/API are authorized. Native artifact builds are authorized; store distribution and automatic releases remain separate.
 - Preserve all unrelated edits. Never change signing identity, license or production infrastructure without authorization.
 - Keep permission checks on the server. Room membership is not sharing consent. Never put precise coordinates in logs, URLs, analytics, push previews or ETA-only/coarse responses.
 - Update relevant docs and the feature status matrix for meaningful changes. Never mark native verification from a web build.

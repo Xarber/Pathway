@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { useSession } from '../lib/session';
+import { canSwitchInstance, developerOptionsEnabled, useSession } from '../lib/session';
 import { storage } from '../lib/storage';
 import { VERSION, releases, type Transport } from '../../../../packages/shared/src/index';
 import {
@@ -31,7 +31,8 @@ export default function Settings({
   const { api, base, session, act, stop, logout, switchInstance, trackingState, lastSent } =
     useSession();
   const [instance, setInstance] = useState(base);
-  const { unlocked, touch, versionTap } = useDeveloperAccess();
+  const { unlocked: developerUnlocked, touch, versionTap } = useDeveloperAccess();
+  const unlocked = developerOptionsEnabled && developerUnlocked;
   const [ideas, setIdeas] = useState(false);
 
   const [mode, setMode] = useState<Transport>('walking');
@@ -47,7 +48,8 @@ export default function Settings({
     refetchInterval: 10000,
   });
   const capabilities = useQuery<any>({
-    queryKey: ['capabilities'],
+    queryKey: ['capabilities', base],
+    enabled: canSwitchInstance || unlocked,
     queryFn: () => api.request('/capabilities'),
   });
   const sessions = useQuery<any[]>({
@@ -165,7 +167,7 @@ export default function Settings({
       </Card>
       <Card>
         <SectionTitle icon="sparkles-outline">Updates & What’s New</SectionTitle>
-        <Label>Pathway {VERSION} · development · stable preference</Label>
+        <Label>Pathway {VERSION}</Label>
         <Label muted>{updateStatus}</Label>
         <Button
           title="Check for Updates"
@@ -208,30 +210,33 @@ export default function Settings({
             </View>
           ))}
       </Card>
-      <Card>
-        <SectionTitle icon="server-outline">Your instance</SectionTitle>
-        <Field
-          label="Server origin"
-          value={instance}
-          onChangeText={setInstance}
-          autoCapitalize="none"
-          placeholder="https://pathway.example.org"
-        />
-        <Label muted>
-          Changing instances signs you out. The new operator will receive your account and any
-          location you explicitly share there.
-        </Label>
-        <Button
-          title="Validate and switch instance"
-          secondary
-          onPress={() => void act(() => switchInstance(instance))}
-        />
-        <Label muted>
-          API v{capabilities.data?.apiVersion || '…'} · Routing{' '}
-          {capabilities.data?.routing ? 'configured' : 'not configured'} · Search{' '}
-          {capabilities.data?.geocoding ? 'configured' : 'not configured'}
-        </Label>
-      </Card>
+      {canSwitchInstance && (
+        <Card>
+          <SectionTitle icon="server-outline">Your instance</SectionTitle>
+          <Field
+            label="Server origin"
+            value={instance}
+            onChangeText={setInstance}
+            autoCapitalize="none"
+            placeholder="https://pathway.example.org"
+          />
+          <Label muted>
+            Changing instances signs you out. The new operator will receive your account and any
+            location you explicitly share there.
+          </Label>
+          <Button
+            title="Validate and switch instance"
+            icon="checkmark-circle-outline"
+            secondary
+            onPress={() => void act(() => switchInstance(instance))}
+          />
+          <Label muted>
+            API v{capabilities.data?.apiVersion || '…'} · Routing{' '}
+            {capabilities.data?.routing ? 'configured' : 'not configured'} · Search{' '}
+            {capabilities.data?.geocoding ? 'configured' : 'not configured'}
+          </Label>
+        </Card>
+      )}
       <Card>
         <SectionTitle icon="key-outline">Signed-in sessions</SectionTitle>
         {sessions.data?.map((s) => (
@@ -301,7 +306,9 @@ export default function Settings({
         )}
         <Button title="Sign out" secondary icon="log-out-outline" onPress={() => void logout()} />
       </Card>
-      <Button title={`Pathway ${VERSION}`} secondary onPress={versionTap} />
+      {developerOptionsEnabled && (
+        <Button title={`Pathway ${VERSION}`} secondary onPress={versionTap} />
+      )}
       {unlocked && (
         <Card>
           <SectionTitle icon="code-slash-outline">Developer Options</SectionTitle>
@@ -325,8 +332,8 @@ export default function Settings({
         </Card>
       )}
       <Label muted size={12}>
-        OpenRecode · AGPL-3.0-only · {VERSION} ·{' '}
-        {process.env.EXPO_PUBLIC_BUILD_COMMIT || 'development'}
+        OpenRecode · AGPL-3.0-only · {VERSION}
+        {developerOptionsEnabled && ` · ${process.env.EXPO_PUBLIC_BUILD_COMMIT || 'development'}`}
       </Label>
     </View>
   );

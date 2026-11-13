@@ -2,6 +2,8 @@
 
 **Different paths. One destination.** An OpenRecode application for temporary journey coordination.
 
+[Open Pathway on X-Center](https://pathway.xcenter.it)
+
 ![Pathway icon](apps/mobile/public/icon-192.png)
 
 Pathway 0.1.0 is an implemented development vertical slice. It is **not yet a production release** or a verified native application. The working flow connects accounts, individual planning, Journey Rooms, invitations, independent sharing consent, live room progress and revocation. Read the [feature status matrix](docs/FEATURES.md) before evaluating coverage against the full specification.

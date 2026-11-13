@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import React, { useState } from 'react';
 import { View } from 'react-native';
-import { useSession } from '../lib/session';
+import { canSwitchInstance, useSession } from '../lib/session';
 import { Card, Button, Chip, Field, Heading, Info, Label, Row, Icon } from './ui';
 export default function Auth() {
   const { authenticate, base, act, switchInstance } = useSession();
@@ -92,15 +92,17 @@ export default function Auth() {
           icon="arrow-forward-outline"
           onPress={() => void submit()}
         />
-        <Info text="You can coordinate through manual status and ETA without granting location access. Joining never enables tracking. Location permission is requested only for a route origin or explicit location sharing. Email verification, password recovery and guest identities are not available in this development version; use test accounts until those release requirements are completed." />
+        <Info text="You can coordinate through manual status and ETA without granting location access. Joining never enables tracking. Location permission is requested only for a route origin or explicit location sharing. Email verification, password recovery and guest identities are not available yet." />
       </Card>
-      <Button
-        title="Connect to your own instance"
-        secondary
-        icon="server-outline"
-        onPress={() => setShowInstance(!showInstance)}
-      />
-      {showInstance && (
+      {canSwitchInstance && (
+        <Button
+          title="Connect to your own instance"
+          secondary
+          icon="server-outline"
+          onPress={() => setShowInstance(!showInstance)}
+        />
+      )}
+      {canSwitchInstance && showInstance && (
         <Card>
           <Field
             label="Instance origin"
@@ -111,6 +113,7 @@ export default function Auth() {
           <Label muted>The instance operator is trusted with your account and shared data.</Label>
           <Button
             title="Validate instance"
+            icon="checkmark-circle-outline"
             onPress={() => void act(() => switchInstance(instance))}
           />
         </Card>

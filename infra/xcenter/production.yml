@@ -1,0 +1,64 @@
+# X-Center appliance. Nginx terminates public TLS; database stays private.
+name: pathway
+services:
+  db:
+    image: postgis/postgis:17-3.5-alpine
+    environment:
+      POSTGRES_DB: pathway
+      POSTGRES_USER: pathway
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a unique URL-safe password}
+    volumes:
+      - ${PATHWAY_DATA_DIR:?Set a dedicated data directory}:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U pathway -d pathway']
+      interval: 5s
+      retries: 12
+    mem_limit: 512m
+    restart: unless-stopped
+  api:
+    image: node:24-alpine
+    user: node
+    working_dir: /app
+    command: [node, dist/apps/server/src/index.js]
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      DATABASE_URL: postgres://pathway:${POSTGRES_PASSWORD}@db:5432/pathway
+      CORS_ORIGINS: ${EXPO_PUBLIC_API_URL:?Set the public HTTPS origin}
+      BUILD_COMMIT: ${BUILD_COMMIT:?Set the deployed commit}
+      ROUTING_URL: ${ROUTING_URL:-}
+      GEOCODING_URL: ${GEOCODING_URL:-}
+      PROVIDER_CONTACT: ${PROVIDER_CONTACT:-}
+    volumes:
+      - ${PATHWAY_RELEASE_DIR:?Set an immutable release directory}:/app:ro
+    ports: ['127.0.0.1:3181:3001']
+    depends_on: { db: { condition: service_healthy } }
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    mem_limit: 256m
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+  web:
+    image: node:24-alpine
+    user: node
+    working_dir: /app
+    command: [node, serve-web.mjs]
+    environment: { HOST: 0.0.0.0, PORT: 8080, PATHWAY_WEB_ROOT: /app/web }
+    volumes:
+      - ${PATHWAY_RELEASE_DIR:?Set an immutable release directory}:/app:ro
+    ports: ['127.0.0.1:3180:8080']
+    read_only: true
+    cap_drop: [ALL]
+    mem_limit: 96m
+    restart: unless-stopped

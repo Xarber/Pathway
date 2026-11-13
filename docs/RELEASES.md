@@ -1,8 +1,8 @@
 # Builds and releases
 
-No remote repository, public release, store submission, deployment, signing identity or distribution source is configured. The local license is open-source; repository visibility is a separate authorization.
+The existing public repository is Xarber/Pathway. Public X-Center web/API and native build workflows are in scope. Store submission and automatic native releases are disabled.
 
-`testing` is development integration. `beta`/`main` are reserved channels; no stable promotion is justified by this initial vertical slice. Full builds trigger only on beta/main or manual dispatch. Checks on testing are manual. Conventional Commits apply. No remote workflow was launched.
+`testing` is development integration. `beta`/`main` are reserved channels; no stable promotion is justified by this initial vertical slice. Full builds trigger only on beta/main or manual dispatch. Checks on testing are manual. Conventional Commits apply.
 
 `.github/workflows/mobile.yml` defines four independent jobs (matrix entries): unsigned device IPA, iOS simulator app.zip, signed universal APK and signed AAB. Successful artifacts upload independently even when another variant fails. Validation is separate; the final readiness job requires all builds. Publication is intentionally disabled because authorization and full artifact/store validation are outstanding. Do not enable a release merely because packages built.
 

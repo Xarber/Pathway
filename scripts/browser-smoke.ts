@@ -8,14 +8,24 @@ import { tmpdir } from 'node:os';
 import { createApp } from '../apps/server/src/app.js';
 import { database } from '../apps/server/src/db.js';
 const root = resolve('apps/mobile/dist');
-const folder = await mkdtemp(join(tmpdir(), 'pathway-browser-'));
-const { app } = await createApp({ db: await database(join(folder, 'test.sqlite')) });
-const apiOrigin = (await app.listen({ host: '127.0.0.1', port: 0 })).replace(
-  '127.0.0.1',
-  'localhost',
-);
-const staticServer = createWebServer(root);
-await new Promise<void>((r) => staticServer.listen(4173, '127.0.0.1', r));
+const deployedOrigin = process.env.PATHWAY_BROWSER_ORIGIN;
+const webOrigin = deployedOrigin || 'http://localhost:4173';
+const configuredOrigin = process.env.PATHWAY_BROWSER_API_ORIGIN;
+const productionUi = !!deployedOrigin || process.env.PATHWAY_BROWSER_PRODUCTION === '1';
+const folder = deployedOrigin ? undefined : await mkdtemp(join(tmpdir(), 'pathway-browser-'));
+const app = folder
+  ? (await createApp({ db: await database(join(folder, 'test.sqlite')) })).app
+  : undefined;
+const apiOrigin = app
+  ? (
+      await app.listen({
+        host: '127.0.0.1',
+        port: configuredOrigin ? Number(new URL(configuredOrigin).port) : 0,
+      })
+    ).replace('127.0.0.1', 'localhost')
+  : deployedOrigin!;
+const staticServer = deployedOrigin ? undefined : createWebServer(root);
+if (staticServer) await new Promise<void>((r) => staticServer.listen(4173, '127.0.0.1', r));
 const browser = await chromium.launch({
   headless: true,
   channel: process.env.CI ? undefined : 'chrome',
@@ -31,10 +41,11 @@ const b = await browser.newContext({
   geolocation: { latitude: 41.8929, longitude: 12.4833 },
   permissions: ['geolocation'],
 });
+const testIdentities: Array<{ name: string; password: string }> = [];
 for (const context of [a, b])
   await context.addInitScript(
     (origin) => localStorage.setItem('pathway:instance', origin),
-    apiOrigin,
+    productionUi ? 'https://stale-instance.invalid' : apiOrigin,
   );
 const alice = await a.newPage(),
   bob = await b.newPage();
@@ -50,7 +61,7 @@ for (const page of [alice, bob]) {
 const suffix = Date.now().toString().slice(-7);
 await mkdir('artifacts', { recursive: true });
 async function register(page: typeof alice, name: string) {
-  await page.goto('http://localhost:4173');
+  await page.goto(webOrigin);
   const entry = page.getByRole('link', { name: 'Open the web app', exact: true });
   const field = page.getByRole('textbox', { name: 'Display name', exact: true });
   await expect(entry.or(field)).toBeVisible();
@@ -59,6 +70,10 @@ async function register(page: typeof alice, name: string) {
       if (!(await field.isVisible())) throw error;
     });
   }
+  if (productionUi)
+    await expect(page.getByRole('button', { name: 'Connect to your own instance' })).toHaveCount(0);
+  const password = 'test-browser-' + crypto.randomUUID();
+  testIdentities.push({ name, password });
   await page.getByRole('textbox', { name: 'Display name', exact: true }).fill('QA ' + name);
   await page
     .getByRole('textbox', { name: 'Username', exact: true })
@@ -66,14 +81,12 @@ async function register(page: typeof alice, name: string) {
   await page
     .getByRole('textbox', { name: 'Email', exact: true })
     .fill(name + suffix + '@example.test');
-  await page
-    .getByRole('textbox', { name: 'Password', exact: true })
-    .fill('test-browser-password-123');
+  await page.getByRole('textbox', { name: 'Password', exact: true }).fill(password);
   await page.getByRole('button', { name: 'Let’s get going', exact: true }).click();
   await expect(page.getByText('Hey QA, let’s meet.', { exact: true })).toBeInViewport();
 }
 try {
-  await alice.goto('http://localhost:4173');
+  await alice.goto(webOrigin);
   await expect(alice.getByRole('link', { name: 'Open the web app', exact: true })).toBeVisible();
   await expect(
     alice.getByText('Actual web interface · QA profile', { exact: false }),
@@ -83,7 +96,7 @@ try {
     '62px',
   );
   await alice.screenshot({ path: 'artifacts/uads36-landing-desktop.png', fullPage: true });
-  await bob.goto('http://localhost:4173');
+  await bob.goto(webOrigin);
   expect(await bob.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await bob.screenshot({ path: 'artifacts/uads36-landing-mobile.png', fullPage: true });
   await bob.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
@@ -117,11 +130,11 @@ try {
   await alice.getByRole('button', { name: 'Hide details', exact: true }).press('Enter');
   await alice.emulateMedia({ reducedMotion: 'no-preference' });
   const deepLink = await browser.newPage();
-  await deepLink.goto('http://localhost:4173/join?token=browser-probe');
+  await deepLink.goto(webOrigin + '/join?token=browser-probe');
   await expect(deepLink.getByRole('textbox', { name: 'Display name', exact: true })).toBeVisible();
   expect(new URL(deepLink.url()).searchParams.get('token')).toBe('browser-probe');
   await deepLink.close();
-  await alice.goto('http://localhost:4173');
+  await alice.goto(webOrigin);
   await expect(alice.getByRole('button', { name: 'Let’s get going', exact: true })).toBeVisible();
   await alice.screenshot({ path: 'artifacts/welcome-desktop.png', fullPage: true });
   await register(alice, 'Alice');
@@ -134,7 +147,7 @@ try {
   await alice.getByRole('textbox', { name: 'Latitude', exact: true }).fill('41.8929');
   await alice.getByRole('textbox', { name: 'Longitude', exact: true }).fill('12.4833');
   await alice.getByRole('button', { name: 'Use these coordinates', exact: true }).click();
-  if (process.env.ROUTING_URL) {
+  if (process.env.ROUTING_URL || process.env.PATHWAY_BROWSER_TEST_ROUTING === '1') {
     await alice.getByRole('button', { name: 'Preview real route', exact: true }).click();
     await expect(alice.getByText('Valhalla · OpenStreetMap', { exact: false })).toBeVisible({
       timeout: 20000,
@@ -189,31 +202,37 @@ try {
   await a.setOffline(false);
   await bob.getByRole('button', { name: 'QA Bob', exact: true }).click();
   await expect(bob.getByText('Privacy dashboard', { exact: true })).toBeVisible();
-  const version = bob.getByRole('button', { name: 'Pathway 0.1.0', exact: true });
-  await version.click();
-  await version.click();
-  await version.click();
-  await expect(bob.getByRole('button', { name: 'Developer Ideas', exact: true })).toBeVisible();
-  await bob.getByRole('button', { name: 'Developer Ideas', exact: true }).click();
-  await bob.getByRole('textbox', { name: 'Idea title', exact: true }).fill('QA idea persistence');
-  await bob.getByRole('button', { name: 'Save idea', exact: true }).click();
-  await expect(bob.getByText('QA idea persistence', { exact: true })).toBeVisible();
-  await bob.getByRole('button', { name: 'Back to Settings', exact: true }).click();
-  await bob.getByRole('tab', { name: 'Home', exact: true }).click();
-  await bob.getByRole('button', { name: 'QA Bob', exact: true }).click();
-  await expect(bob.getByRole('button', { name: 'Developer Ideas', exact: true })).toHaveCount(0);
-  await bob.reload();
-  await bob.getByRole('button', { name: 'QA Bob', exact: true }).click();
-  const reopened = bob.getByRole('button', { name: 'Pathway 0.1.0', exact: true });
-  await reopened.click();
-  await reopened.click();
-  await reopened.click();
-  await bob.getByRole('button', { name: 'Developer Ideas', exact: true }).click();
-  await expect(bob.getByText('QA idea persistence', { exact: true })).toBeVisible();
-  await bob.screenshot({ path: 'artifacts/ideas-mobile.png', fullPage: true });
+  if (productionUi) {
+    await expect(bob.getByText('Your instance', { exact: true })).toHaveCount(0);
+    await expect(bob.getByRole('button', { name: 'Pathway 0.1.0', exact: true })).toHaveCount(0);
+    await expect(bob.getByRole('button', { name: 'Developer Ideas', exact: true })).toHaveCount(0);
+  } else {
+    const version = bob.getByRole('button', { name: 'Pathway 0.1.0', exact: true });
+    await version.click();
+    await version.click();
+    await version.click();
+    await expect(bob.getByRole('button', { name: 'Developer Ideas', exact: true })).toBeVisible();
+    await bob.getByRole('button', { name: 'Developer Ideas', exact: true }).click();
+    await bob.getByRole('textbox', { name: 'Idea title', exact: true }).fill('QA idea persistence');
+    await bob.getByRole('button', { name: 'Save idea', exact: true }).click();
+    await expect(bob.getByText('QA idea persistence', { exact: true })).toBeVisible();
+    await bob.getByRole('button', { name: 'Back to Settings', exact: true }).click();
+    await bob.getByRole('tab', { name: 'Home', exact: true }).click();
+    await bob.getByRole('button', { name: 'QA Bob', exact: true }).click();
+    await expect(bob.getByRole('button', { name: 'Developer Ideas', exact: true })).toHaveCount(0);
+    await bob.reload();
+    await bob.getByRole('button', { name: 'QA Bob', exact: true }).click();
+    const reopened = bob.getByRole('button', { name: 'Pathway 0.1.0', exact: true });
+    await reopened.click();
+    await reopened.click();
+    await reopened.click();
+    await bob.getByRole('button', { name: 'Developer Ideas', exact: true }).click();
+    await expect(bob.getByText('QA idea persistence', { exact: true })).toBeVisible();
+    await bob.screenshot({ path: 'artifacts/ideas-mobile.png', fullPage: true });
+  }
   expect(errors).toEqual([]);
   console.log(
-    'PASS: two browser accounts → route/room → targeted invitation → acceptance → precise foreground collection → second-client delivery → revoke → position removed; PWA offline reload; Developer Ideas; landing/guide light-dark layouts and keyboard disclosure in Reduced Motion. Synthetic browser GPS, no native device claim.',
+    'PASS: two browser accounts → route/room → targeted invitation → acceptance → precise foreground collection → second-client delivery → revoke → position removed; PWA offline reload; build-specific settings; landing/guide light-dark layouts and keyboard disclosure in Reduced Motion. Synthetic browser GPS, no native device claim.',
   );
 } catch (error) {
   await alice.screenshot({ path: 'artifacts/browser-failure.png', fullPage: true });
@@ -221,7 +240,35 @@ try {
   throw error;
 } finally {
   await browser.close();
-  await new Promise<void>((r) => staticServer.close(() => r()));
-  await app.close();
-  await rm(folder, { recursive: true });
+  if (deployedOrigin) {
+    for (const { name, password } of testIdentities) {
+      const login = await fetch(deployedOrigin + '/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: name + suffix + '@example.test', password }),
+      });
+      if (!login.ok) {
+        console.error(
+          'Could not sign in to remove the temporary QA account:',
+          name + suffix,
+          login.status,
+        );
+        process.exitCode = 1;
+        continue;
+      }
+      const { token } = await login.json();
+      const deleted = await fetch(deployedOrigin + '/api/v1/account', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token },
+        body: JSON.stringify({ password }),
+      });
+      if (!deleted.ok) {
+        console.error('Could not remove temporary QA account:', name + suffix, deleted.status);
+        process.exitCode = 1;
+      }
+    }
+  }
+  if (staticServer) await new Promise<void>((r) => staticServer.close(() => r()));
+  await app?.close();
+  if (folder) await rm(folder, { recursive: true });
 }

@@ -98,8 +98,7 @@ export default function Guide() {
         <Label>
           The repository’s docs/INDEX.md links architecture, API, maps, routing, privacy, native
           build instructions and the honest feature-status matrix. docs/XCENTER.md describes staging
-          and rollback. No external repository URL or release source is configured for this
-          checkout.
+          and rollback.
         </Label>
         <Label>
           Original Pathway code is AGPL-3.0-only. Third-party libraries, fonts and map data retain
@@ -107,6 +106,9 @@ export default function Guide() {
           service must provide the corresponding source required by that license. Native SDK/store
           compatibility still needs a distribution review.
         </Label>
+        <PublicLink href="https://github.com/Xarber/Pathway" icon="logo-github">
+          View source on GitHub
+        </PublicLink>
         <PublicLink href="/license.txt" icon="document-text-outline">
           Read AGPL-3.0-only
         </PublicLink>

@@ -13,8 +13,12 @@ import type {
 import { coarse } from '../../../../packages/geospatial/src/index';
 import { secrets, storage } from './storage';
 type Session = { token: string; profile: Profile };
+const embeddedOrigin = process.env.EXPO_PUBLIC_API_URL?.trim();
+export const canSwitchInstance = !embeddedOrigin;
+export const developerOptionsEnabled = process.env.EXPO_PUBLIC_DISTRIBUTION !== 'production';
+const defaultOrigin = embeddedOrigin || 'http://localhost:3001';
 function useSessionState() {
-  const [base, setBase] = useState(process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3001');
+  const [base, setBase] = useState(defaultOrigin);
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState('');
@@ -31,8 +35,13 @@ function useSessionState() {
   useEffect(() => {
     void Promise.all([storage.get('instance'), secrets.get()])
       .then(([url, raw]) => {
-        if (url) setBase(url);
-        if (raw) setSession(JSON.parse(raw));
+        const origin = canSwitchInstance && url ? url : defaultOrigin;
+        setBase(origin);
+        if (!raw) return;
+        const stored = JSON.parse(raw) as Session & { origin?: string };
+        if (stored.origin ? stored.origin === origin : canSwitchInstance || url === origin)
+          setSession(stored);
+        else void secrets.clear();
       })
       .catch(() => setNotice('Stored session could not be restored.'))
       .finally(() => setReady(true));
@@ -166,7 +175,7 @@ function useSessionState() {
     return act(async () => {
       const s = await api.request<Session>(path, 'POST', data);
       setSession(s);
-      await secrets.set(JSON.stringify(s));
+      await secrets.set(JSON.stringify({ ...s, origin: base }));
       return s;
     });
   }
@@ -181,6 +190,7 @@ function useSessionState() {
     client.clear();
   }
   async function switchInstance(url: string) {
+    if (!canSwitchInstance) throw Error('This build uses a configured server');
     const parsed = new URL(url);
     if (
       parsed.username ||
