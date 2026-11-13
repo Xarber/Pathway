@@ -29,3 +29,10 @@ Private device-local Ideas are inaccessible until an authorized JSON export is s
 - `infra`: initial SQL schema, PostGIS Compose, API container, optional routing and HTTPS examples.
 
 No full plugin runtime is implemented. Provider and platform adapters are extension boundaries; preserve typed contracts rather than granting arbitrary code access to sensitive state.
+
+## UADS section 36
+
+- Keep the first-visit web introduction at `/` and preserve direct invitation links, browser history and drafts. Native launch goes straight to the app. See `docs/features/WEB_ENTRY.md`.
+- Use X-Center by default. Follow `docs/XCENTER.md` for staging and preserve the established publication scope. Reuse the confirmed existing Pathway repository.
+- Prefer configured hardware-backed commit signing. Use a command-local unsigned fallback if the key is unavailable and report it. Rewriting existing commits requires explicit authorization.
+- Consult applicable design and motion skills, verify contrast and Reduced Motion, and test the changed interface in the browser and on available native targets.

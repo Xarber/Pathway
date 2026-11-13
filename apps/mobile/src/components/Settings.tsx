@@ -5,7 +5,19 @@ import { useQuery } from '@tanstack/react-query';
 import { useSession } from '../lib/session';
 import { storage } from '../lib/storage';
 import { VERSION, releases, type Transport } from '../../../../packages/shared/src/index';
-import { Card, Label, Button, Chip, Field, Heading, Info, Row, time } from './ui';
+import {
+  Card,
+  Label,
+  Button,
+  Chip,
+  Field,
+  Heading,
+  Info,
+  Row,
+  time,
+  SectionTitle,
+  Icon,
+} from './ui';
 import { Modes } from './Planner';
 import Ideas from './Ideas';
 import { useDeveloperAccess } from '../lib/developer-access';
@@ -89,9 +101,7 @@ export default function Settings({
         Settings
       </Heading>
       <Card>
-        <Label size={19} bold>
-          Privacy dashboard
-        </Label>
+        <SectionTitle icon="shield-checkmark-outline">Privacy dashboard</SectionTitle>
         {privacy.data?.length ? (
           privacy.data.map((p) => (
             <View key={p.journeyId} style={{ gap: 7 }}>
@@ -124,9 +134,7 @@ export default function Settings({
         <Info text="Grant state is read from your server. Foreground permission does not itself enable sharing. Background tracking is not active in this version. Live points become stale after 60 seconds and are removed after five minutes. Revocation, expiry and journey completion delete stored live coordinates. A server operator can still access data entrusted to their instance." />
       </Card>
       <Card>
-        <Label size={19} bold>
-          Make it yours
-        </Label>
+        <SectionTitle icon="color-palette-outline">Make it yours</SectionTitle>
         <Label bold size={13}>
           Appearance
         </Label>
@@ -156,9 +164,7 @@ export default function Settings({
         <Info text="Your default mode is used for new plans. Existing participant transport choices remain independent." />
       </Card>
       <Card>
-        <Label size={19} bold>
-          Updates & What’s New
-        </Label>
+        <SectionTitle icon="sparkles-outline">Updates & What’s New</SectionTitle>
         <Label>Pathway {VERSION} · development · stable preference</Label>
         <Label muted>{updateStatus}</Label>
         <Button
@@ -193,7 +199,7 @@ export default function Settings({
               </Label>
               {r.added.map((f) => (
                 <Row key={f.text}>
-                  <Label>✦</Label>
+                  <Icon name={f.icon === 'map' ? 'map-outline' : 'shield-checkmark-outline'} />
                   <Label>{f.text}</Label>
                 </Row>
               ))}
@@ -203,9 +209,7 @@ export default function Settings({
           ))}
       </Card>
       <Card>
-        <Label size={19} bold>
-          Your instance
-        </Label>
+        <SectionTitle icon="server-outline">Your instance</SectionTitle>
         <Field
           label="Server origin"
           value={instance}
@@ -229,9 +233,7 @@ export default function Settings({
         </Label>
       </Card>
       <Card>
-        <Label size={19} bold>
-          Signed-in sessions
-        </Label>
+        <SectionTitle icon="key-outline">Signed-in sessions</SectionTitle>
         {sessions.data?.map((s) => (
           <View key={s.id} style={{ gap: 8 }}>
             <Label muted>
@@ -247,9 +249,7 @@ export default function Settings({
         ))}
       </Card>
       <Card>
-        <Label size={19} bold>
-          Your data
-        </Label>
+        <SectionTitle icon="file-tray-outline">Your data</SectionTitle>
         <Button
           title="Delete completed journey history"
           danger
@@ -304,9 +304,7 @@ export default function Settings({
       <Button title={`Pathway ${VERSION}`} secondary onPress={versionTap} />
       {unlocked && (
         <Card>
-          <Label size={19} bold>
-            Developer Options
-          </Label>
+          <SectionTitle icon="code-slash-outline">Developer Options</SectionTitle>
           <Label muted>
             API v{capabilities.data?.apiVersion || 'unknown'} · {base}
           </Label>

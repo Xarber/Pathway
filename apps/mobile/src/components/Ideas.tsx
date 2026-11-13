@@ -172,6 +172,18 @@ export default function Ideas() {
             <Chip
               key={c}
               title={c}
+              icon={
+                (
+                  {
+                    feature: 'bulb-outline',
+                    improvement: 'trending-up-outline',
+                    bug: 'bug-outline',
+                    ui: 'color-palette-outline',
+                    performance: 'speedometer-outline',
+                    other: 'ellipsis-horizontal-circle-outline',
+                  } as const
+                )[c as Idea['category']]
+              }
               active={category === c}
               onPress={() => setCategory(c as Idea['category'])}
             />
@@ -182,6 +194,13 @@ export default function Ideas() {
             <Chip
               key={p}
               title={p}
+              icon={
+                p === 'high'
+                  ? 'arrow-up-outline'
+                  : p === 'low'
+                    ? 'arrow-down-outline'
+                    : 'remove-outline'
+              }
               active={priority === p}
               onPress={() => setPriority(p as Idea['priority'])}
             />

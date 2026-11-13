@@ -58,3 +58,11 @@ Complete account verification/recovery, background services, notification delive
 ## Git and publication
 
 Work is recorded in Conventional Commits on local `testing`. `beta` and `main` are reserved bootstrap refs and have not received the app promotion. No temporary branch/worktree was used. No remote/push, release, distribution metadata publication or deployment occurred. The host's hardware-backed Git signing key was unavailable; commits used a command-local signing override without changing the user's Git configuration.
+
+## UADS 36 follow-up — 2026-11-13
+
+- Scope: Expo Router web entry, public guide, shared UI motion and contrast, iOS/web materials, Leaflet map lifecycle, and isolated X-Center staging configuration.
+- Production web export and Chrome Playwright scenario passed. Checked desktop and mobile viewport widths, light and dark landing, keyboard disclosure with Reduced Motion, first visit, remembered entry, history, draft preservation, direct invitations, two independent accounts, live foreground delivery, revocation, Ideas and offline reload. The browser used synthetic GPS and a temporary SQLite database. External routing was disabled for this browser run.
+- The browser exposed a map teardown error. The web adapter now disconnects its resize observer on teardown and fits live data without queuing animated camera moves. The repeated scenario completed with zero uncaught page errors.
+- Type checking and 28 automated tests passed. Expo exported iOS and Android Hermes JavaScript bundles. Native binaries, simulator/emulator behavior, device permissions, iOS Glass and physical-device tracking remain unverified.
+- X-Center staging is configured for private loopback services. The host and PostGIS container were unavailable for runtime validation. No release or deployment was performed.

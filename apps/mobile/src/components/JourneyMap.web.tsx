@@ -21,11 +21,16 @@ export default function JourneyMap({
   const [ready, setReady] = useState(false);
   useEffect(() => {
     let disposed = false;
+    let resizeObserver: ResizeObserver | undefined;
     void import('leaflet').then((module) => {
       if (disposed || !container.current) return;
       L.current = module;
-      const m = module.map(container.current, { zoomControl: true }).setView([41.9, 12.49], 12);
+      const m = module.map(container.current, { trackResize: false }).setView([41.9, 12.49], 12);
       map.current = m;
+      resizeObserver = new ResizeObserver(() => {
+        if (!disposed) m.invalidateSize({ pan: false });
+      });
+      resizeObserver.observe(container.current);
       module
         .tileLayer(
           process.env.EXPO_PUBLIC_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -43,6 +48,7 @@ export default function JourneyMap({
     });
     return () => {
       disposed = true;
+      resizeObserver?.disconnect();
       map.current?.remove();
       map.current = null;
     };
@@ -105,8 +111,8 @@ export default function JourneyMap({
       lib.polyline(path, { color: '#6269f5', weight: 5 }).addTo(layer);
       bounds.push(...path);
     }
-    if (bounds.length) m.fitBounds(lib.latLngBounds(bounds), { padding: [45, 45], maxZoom: 15 });
-    m.invalidateSize();
+    if (bounds.length)
+      m.fitBounds(lib.latLngBounds(bounds), { padding: [45, 45], maxZoom: 15, animate: false });
   }, [ready, destination, meetingPoint, origin, participants, route]);
   return (
     <View style={{ height, borderRadius: 24, overflow: 'hidden', backgroundColor: '#e8eae6' }}>

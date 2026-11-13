@@ -28,6 +28,10 @@ import {
   time,
   type IconName,
 } from '../src/components/ui';
+import WebEntry from '../src/lib/web-entry';
+import { useIntroduction } from '../src/lib/introduction';
+import MaterialSurface from '../src/components/MaterialSurface';
+import { MotionReveal } from '../src/lib/motion';
 import Auth from '../src/components/Auth';
 import Planner from '../src/components/Planner';
 import Room from '../src/components/Room';
@@ -41,6 +45,7 @@ const tabs: { id: string; label: string; icon: IconName }[] = [
   { id: 'friends', label: 'Friends', icon: 'people-outline' },
 ];
 function App() {
+  const showIntroduction = useIntroduction();
   const { ready, session, journeys, api, act, notice, setNotice, tracking, stop } = useSession();
   const system = useColorScheme();
   const [appearance, setAppearance] = useState('system');
@@ -381,7 +386,7 @@ function App() {
             </View>
           )}
           <View style={{ flex: 1 }}>
-            <View
+            <MaterialSurface
               style={{
                 paddingHorizontal: wide ? 40 : 22,
                 paddingVertical: 17,
@@ -390,17 +395,32 @@ function App() {
                 justifyContent: 'space-between',
                 borderBottomWidth: 1,
                 borderColor: c.line,
-                backgroundColor: c.surface,
               }}
             >
-              <Row>
-                <Icon name="git-merge-outline" />
-                <Label size={20} bold>
-                  {wide && session
-                    ? tabs.find((t) => t.id === tab)?.label || 'Settings'
-                    : 'pathway'}
-                </Label>
-              </Row>
+              {showIntroduction ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Pathway introduction"
+                  onPress={showIntroduction}
+                  style={{ minHeight: 44, justifyContent: 'center' }}
+                >
+                  <Row>
+                    <Icon name="git-merge-outline" />
+                    <Label size={20} bold>
+                      pathway
+                    </Label>
+                  </Row>
+                </Pressable>
+              ) : (
+                <Row>
+                  <Icon name="git-merge-outline" />
+                  <Label size={20} bold>
+                    {wide && session
+                      ? tabs.find((t) => t.id === tab)?.label || 'Settings'
+                      : 'pathway'}
+                  </Label>
+                </Row>
+              )}
               {session && (
                 <Button
                   title={session.profile.name}
@@ -410,7 +430,7 @@ function App() {
                   onPress={() => changeTab('settings')}
                 />
               )}
-            </View>
+            </MaterialSurface>
             {tracking && (
               <View style={{ padding: 12, backgroundColor: c.soft }}>
                 <Row wrap>
@@ -468,7 +488,8 @@ function App() {
           </View>
         </View>
         {notice && (
-          <View
+          <MotionReveal
+            kind="feedback"
             accessibilityRole="alert"
             style={{
               position: 'absolute',
@@ -487,7 +508,7 @@ function App() {
           >
             <Label>{notice}</Label>
             <Button title="Dismiss" secondary compact onPress={() => setNotice('')} />
-          </View>
+          </MotionReveal>
         )}
       </SafeAreaView>
     </Theme.Provider>
@@ -495,8 +516,10 @@ function App() {
 }
 export default function Index() {
   return (
-    <SessionProvider>
-      <App />
-    </SessionProvider>
+    <WebEntry>
+      <SessionProvider>
+        <App />
+      </SessionProvider>
+    </WebEntry>
   );
 }

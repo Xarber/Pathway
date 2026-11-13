@@ -4,10 +4,17 @@
 
 ### Added
 
+- Web introduction at the root route, with remembered entry, a public guide and a return path that preserves drafts.
+- Shared motion and contrast updates with Reduced Motion support and iOS material fallback.
+
 - Expo native/web app with journey planning, provider-backed maps/routes and saved places.
 - Account sessions, friends, accepted Journey Room invitations, statuses, chat and meeting proposals.
 - Temporary per-viewer sharing, foreground collection and privacy dashboard.
 - Local Developer Ideas, changelog views, PWA shell/offline support, self-hosting and build configurations.
+
+### Fixed
+
+- Web map teardown during rapid navigation and live updates.
 
 ### Security
 

@@ -1,51 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Two isolated browser sessions; synthetic geolocation and test accounts, real HTTP/WS API.
 import { chromium, expect } from '@playwright/test';
-import { createServer } from 'node:http';
-import { readFile, mkdtemp, mkdir, rm } from 'node:fs/promises';
-import { extname, resolve, join } from 'node:path';
+import { createWebServer } from './serve-web.mjs';
+import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createApp } from '../apps/server/src/app.js';
 import { database } from '../apps/server/src/db.js';
 const root = resolve('apps/mobile/dist');
 const folder = await mkdtemp(join(tmpdir(), 'pathway-browser-'));
 const { app } = await createApp({ db: await database(join(folder, 'test.sqlite')) });
-await app.listen({ host: '127.0.0.1', port: 3001 });
-const mime: Record<string, string> = {
-  '.html': 'text/html',
-  '.js': 'application/javascript',
-  '.json': 'application/json',
-  '.webmanifest': 'application/manifest+json',
-  '.css': 'text/css',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.ttf': 'font/ttf',
-  '.woff2': 'font/woff2',
-};
-const staticServer = createServer(async (req, res) => {
-  try {
-    let path = new URL(req.url || '/', 'http://localhost').pathname;
-    path = path === '/' ? '/index.html' : path;
-    let file = resolve(root, '.' + path);
-    if (!file.startsWith(root + '/')) throw Error();
-    let bytes;
-    try {
-      bytes = await readFile(file);
-    } catch {
-      if (extname(file)) throw Error();
-      file = join(root, 'index.html');
-      bytes = await readFile(file);
-    }
-    res.writeHead(200, {
-      'Content-Type': mime[extname(file)] || 'application/octet-stream',
-      'Cache-Control': 'no-cache',
-    });
-    res.end(bytes);
-  } catch {
-    res.writeHead(404);
-    res.end();
-  }
-});
+const apiOrigin = (await app.listen({ host: '127.0.0.1', port: 0 })).replace(
+  '127.0.0.1',
+  'localhost',
+);
+const staticServer = createWebServer(root);
 await new Promise<void>((r) => staticServer.listen(4173, '127.0.0.1', r));
 const browser = await chromium.launch({
   headless: true,
@@ -62,12 +31,17 @@ const b = await browser.newContext({
   geolocation: { latitude: 41.8929, longitude: 12.4833 },
   permissions: ['geolocation'],
 });
+for (const context of [a, b])
+  await context.addInitScript(
+    (origin) => localStorage.setItem('pathway:instance', origin),
+    apiOrigin,
+  );
 const alice = await a.newPage(),
   bob = await b.newPage();
 for (const page of [alice, bob]) {
   page.on('pageerror', (e) => {
     errors.push(e.message);
-    console.error('PAGE ERROR', e.message);
+    console.error('PAGE ERROR', e.stack ?? e.message);
   });
   page.on('console', (m) => {
     if (m.type() === 'error') console.error('CONSOLE', m.text());
@@ -77,6 +51,14 @@ const suffix = Date.now().toString().slice(-7);
 await mkdir('artifacts', { recursive: true });
 async function register(page: typeof alice, name: string) {
   await page.goto('http://localhost:4173');
+  const entry = page.getByRole('link', { name: 'Open the web app', exact: true });
+  const field = page.getByRole('textbox', { name: 'Display name', exact: true });
+  await expect(entry.or(field)).toBeVisible();
+  if (!(await field.isVisible())) {
+    await entry.click({ timeout: 2000 }).catch(async (error) => {
+      if (!(await field.isVisible())) throw error;
+    });
+  }
   await page.getByRole('textbox', { name: 'Display name', exact: true }).fill('QA ' + name);
   await page
     .getByRole('textbox', { name: 'Username', exact: true })
@@ -91,6 +73,54 @@ async function register(page: typeof alice, name: string) {
   await expect(page.getByText('Hey QA, let’s meet.', { exact: true })).toBeInViewport();
 }
 try {
+  await alice.goto('http://localhost:4173');
+  await expect(alice.getByRole('link', { name: 'Open the web app', exact: true })).toBeVisible();
+  await expect(
+    alice.getByText('Actual web interface · QA profile', { exact: false }),
+  ).toBeVisible();
+  await expect(alice.getByText('Meet up.', { exact: false }).first()).toHaveCSS(
+    'font-size',
+    '62px',
+  );
+  await alice.screenshot({ path: 'artifacts/uads36-landing-desktop.png', fullPage: true });
+  await bob.goto('http://localhost:4173');
+  expect(await bob.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await bob.screenshot({ path: 'artifacts/uads36-landing-mobile.png', fullPage: true });
+  await bob.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  await bob.reload();
+  await expect(bob.getByRole('link', { name: 'Open the web app', exact: true })).toBeVisible();
+  await expect(bob.getByText('Meet up.', { exact: false }).first()).toHaveCSS(
+    'color',
+    'rgb(242, 243, 253)',
+  );
+  await bob.screenshot({ path: 'artifacts/uads36-landing-dark.png', fullPage: true });
+  await bob.emulateMedia({ colorScheme: 'light', reducedMotion: 'no-preference' });
+  await alice.getByRole('link', { name: 'Guide', exact: true }).click();
+  await expect(alice.getByText('Your Pathway guide', { exact: true })).toBeVisible();
+  await expect(alice.getByText('Understand what you share', { exact: true })).toBeVisible();
+  await alice.getByRole('link', { name: 'Open the web app', exact: true }).click();
+  const nameField = alice.getByRole('textbox', { name: 'Display name', exact: true });
+  await nameField.fill('Unsaved draft');
+  await alice.getByRole('button', { name: 'Pathway introduction', exact: true }).click();
+  await expect(alice.getByRole('link', { name: 'Open the web app', exact: true })).toBeVisible();
+  await alice.goBack();
+  await expect(nameField).toHaveValue('Unsaved draft');
+  await alice.goForward();
+  await alice.getByRole('link', { name: 'Open the web app', exact: true }).click();
+  await expect(nameField).toHaveValue('Unsaved draft');
+  await alice.emulateMedia({ reducedMotion: 'reduce' });
+  await alice.getByRole('button', { name: 'How this works', exact: true }).press('Enter');
+  await expect(alice.getByRole('button', { name: 'Hide details', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  await alice.getByRole('button', { name: 'Hide details', exact: true }).press('Enter');
+  await alice.emulateMedia({ reducedMotion: 'no-preference' });
+  const deepLink = await browser.newPage();
+  await deepLink.goto('http://localhost:4173/join?token=browser-probe');
+  await expect(deepLink.getByRole('textbox', { name: 'Display name', exact: true })).toBeVisible();
+  expect(new URL(deepLink.url()).searchParams.get('token')).toBe('browser-probe');
+  await deepLink.close();
   await alice.goto('http://localhost:4173');
   await expect(alice.getByRole('button', { name: 'Let’s get going', exact: true })).toBeVisible();
   await alice.screenshot({ path: 'artifacts/welcome-desktop.png', fullPage: true });
@@ -183,7 +213,7 @@ try {
   await bob.screenshot({ path: 'artifacts/ideas-mobile.png', fullPage: true });
   expect(errors).toEqual([]);
   console.log(
-    'PASS: two browser accounts → route/room → targeted invitation → acceptance → precise foreground collection → second-client delivery → revoke → position removed; PWA offline reload; Developer Ideas. Synthetic browser GPS, no native device claim.',
+    'PASS: two browser accounts → route/room → targeted invitation → acceptance → precise foreground collection → second-client delivery → revoke → position removed; PWA offline reload; Developer Ideas; landing/guide light-dark layouts and keyboard disclosure in Reduced Motion. Synthetic browser GPS, no native device claim.',
   );
 } catch (error) {
   await alice.screenshot({ path: 'artifacts/browser-failure.png', fullPage: true });

@@ -45,3 +45,5 @@ The production web output is `apps/mobile/dist`. A development build is required
 [Start here](docs/INDEX.md) · [Architecture](docs/ARCHITECTURE.md) · [Privacy](docs/PRIVACY.md) · [Self-hosting](docs/DEPLOYMENT.md) · [Builds](docs/RELEASES.md) · [Test evidence](docs/reports/VALIDATION.md) · [Remaining work](docs/ROADMAP.md)
 
 All original code is **AGPL-3.0-only**; third-party software and map data retain their licenses. No advertising or mandatory core subscription. No repository, service or release was published by this development session.
+
+The first web visit opens the introduction at `/`. Select **Open the web app** to enter. The header logo returns to the introduction. See the [web entry guide](docs/features/WEB_ENTRY.md) and [X-Center staging instructions](docs/XCENTER.md).

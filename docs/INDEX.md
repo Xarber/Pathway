@@ -7,5 +7,6 @@
 - [Development](DEVELOPMENT.md), [testing](TESTING.md), [validation report](reports/VALIDATION.md).
 - [Deployment](DEPLOYMENT.md), [releases](RELEASES.md), [branding](BRANDING.md).
 - [Developer Ideas](features/DEVELOPER_IDEAS.md), [repository Ideas](IDEAS.json), [roadmap](ROADMAP.md), [implementation plan](PLAN.md).
+- [Web entry and motion](features/WEB_ENTRY.md), [X-Center staging](XCENTER.md), [UADS 36 plan](UADS_36_PLAN.md).
 
 Use the status matrix and validation report together. Source code presence is not evidence of native installation, physical-device behavior, deployment or publication.

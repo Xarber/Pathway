@@ -50,3 +50,6 @@ Status refers to observed evidence, not the eventual product promise. â€œTestedâ
 | Secure plugin runtime/P2P/federation | Not implemented | Adapter seams only; no arbitrary plugin execution |
 | Four-format native build workflows | Implemented but not fully tested | Workflow/scripts prepared; no native binaries or remote runs |
 | Release/distribution/deployment | Not implemented | No public destination authorized or activated |
+| Integrated root introduction | Implemented and tested | Web first-visit preference, logo return, browser history and direct invitations. Native startup bypasses the introduction. |
+| Interface motion and materials | Implemented but not fully tested | Shared motion tokens, contrast, Reduced Motion, iOS Glass availability check and opaque fallback |
+| X-Center staging | Implemented but not fully tested | Isolated configuration and manual package workflow. Remote activation pending. |

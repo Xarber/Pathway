@@ -8,7 +8,18 @@ export default function Root({ children }: PropsWithChildren) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+        <title>Pathway — Meet up on your terms</title>
+        <meta property="og:title" content="Pathway — Meet up on your terms" />
+        <meta
+          property="og:description"
+          content="Plan journeys together with temporary, consent-based location sharing."
+        />
+        <meta property="og:image" content="/screenshots/browser-home.png" />
         <meta name="theme-color" content="#6269F5" />
+        <meta
+          name="pathway-build"
+          content={process.env.EXPO_PUBLIC_BUILD_COMMIT || 'development'}
+        />
         <meta
           name="description"
           content="Different paths. One destination. Temporary journey coordination with your people."
@@ -22,7 +33,7 @@ export default function Root({ children }: PropsWithChildren) {
         <style
           dangerouslySetInnerHTML={{
             __html:
-              'html,body,#root{min-height:100%;}body{overscroll-behavior-y:none;}input,textarea{font-size:16px!important}button,a{touch-action:manipulation}*:focus-visible{outline:3px solid #6269F5;outline-offset:3px}.leaflet-container{font-family:system-ui,sans-serif}.leaflet-control-attribution{font-size:10px!important;max-width:100%}',
+              'html,body,#root{min-height:100%;}body{overscroll-behavior-y:none;}input,textarea{font-size:16px!important}button,a{touch-action:manipulation}*:focus-visible{outline:3px solid #6269F5;outline-offset:3px}.pathway-entry-fade{animation:pathway-entry 180ms cubic-bezier(.23,1,.32,1)}@keyframes pathway-entry{from{opacity:.85}to{opacity:1}}@media(prefers-reduced-motion:reduce){.pathway-entry-fade{animation:none}}.leaflet-container{font-family:system-ui,sans-serif}.leaflet-control-attribution{font-size:10px!important;max-width:100%}',
           }}
         />
         {headNodes}

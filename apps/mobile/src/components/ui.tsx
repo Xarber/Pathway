@@ -9,29 +9,12 @@ import {
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
+import Animated, { cubicBezier } from 'react-native-reanimated';
+import { useMotion, MotionReveal } from '../lib/motion';
+import { MOTION } from '../../../../packages/design-system/src/motion';
 import { Ionicons } from '@expo/vector-icons';
-export const colors = {
-  light: {
-    bg: '#F6F7FB',
-    surface: '#FFFFFF',
-    text: '#1E2339',
-    muted: '#687087',
-    line: '#E6E9F1',
-    soft: '#EDEEFF',
-    accent: '#5158DC',
-    success: '#18795B',
-  },
-  dark: {
-    bg: '#101321',
-    surface: '#1B2033',
-    text: '#F2F3FD',
-    muted: '#B0B8CE',
-    line: '#343C56',
-    soft: '#2D3153',
-    accent: '#ADB1FF',
-    success: '#7AD8B6',
-  },
-};
+import { colors, primaryAction } from '../../../../packages/design-system/src/colors';
+export { colors };
 export const Theme = createContext(colors.light);
 export const useTheme = () => useContext(Theme);
 export type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -125,6 +108,7 @@ export function Button({
   danger = false,
   disabled = false,
   compact = false,
+  expanded,
 }: {
   title: string;
   onPress: () => void;
@@ -133,32 +117,48 @@ export function Button({
   danger?: boolean;
   disabled?: boolean;
   compact?: boolean;
+  expanded?: boolean;
 }) {
   const c = useTheme();
-  const foreground = danger ? '#B92F4F' : secondary ? c.accent : '#FFFFFF';
+  const { policy } = useMotion();
+  const [pressed, setPressed] = React.useState(false);
+  const foreground = danger ? c.danger : secondary ? c.accent : '#FFFFFF';
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={title}
       disabled={disabled}
+      accessibilityState={{ disabled, expanded }}
+      aria-expanded={expanded}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      pressRetentionOffset={16}
       onPress={onPress}
-      style={({ pressed }) => ({
-        minHeight: 46,
-        paddingHorizontal: compact ? 13 : 18,
-        paddingVertical: 11,
-        borderRadius: 15,
-        backgroundColor: danger ? c.soft : secondary ? c.soft : '#6269F5',
-        opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexDirection: 'row',
-        gap: 9,
-      })}
+      style={{ borderRadius: 15 }}
     >
-      {icon && <Icon name={icon} color={foreground} size={19} />}
-      <Text style={{ fontSize: 14, fontWeight: '600', color: foreground, flexShrink: 1 }}>
-        {title}
-      </Text>
+      <Animated.View
+        style={{
+          minHeight: 48,
+          paddingHorizontal: compact ? 13 : 18,
+          paddingVertical: 11,
+          borderRadius: 15,
+          backgroundColor: danger ? c.soft : secondary ? c.soft : primaryAction,
+          opacity: disabled ? 0.55 : pressed ? 0.9 : 1,
+          transform: [{ scale: pressed ? policy.pressScale : 1 }],
+          transitionProperty: ['transform', 'opacity'],
+          transitionDuration: policy.pressMs,
+          transitionTimingFunction: cubicBezier(...MOTION.easeOutBezier),
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexDirection: 'row',
+          gap: 9,
+        }}
+      >
+        {icon && <Icon name={icon} color={foreground} size={19} />}
+        <Text style={{ fontSize: 14, fontWeight: '600', color: foreground, flexShrink: 1 }}>
+          {title}
+        </Text>
+      </Animated.View>
     </Pressable>
   );
 }
@@ -210,7 +210,7 @@ export function Chip({
       accessibilityState={{ selected: active }}
       onPress={onPress}
       style={{
-        minHeight: 44,
+        minHeight: 48,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 7,
@@ -245,11 +245,14 @@ export function Info({ text }: { text: string }) {
         secondary
         compact
         onPress={() => setOpen(!open)}
+        expanded={open}
       />
       {open && (
-        <Label muted size={13}>
-          {text}
-        </Label>
+        <MotionReveal>
+          <Label muted size={13}>
+            {text}
+          </Label>
+        </MotionReveal>
       )}
     </View>
   );
@@ -267,4 +270,15 @@ export function Empty({ icon, title, text }: { icon: IconName; title: string; te
 }
 export function time(value: number) {
   return new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+export function SectionTitle({ icon, children }: { icon: IconName; children: React.ReactNode }) {
+  return (
+    <Row>
+      <Icon name={icon} />
+      <Label size={19} bold>
+        {children}
+      </Label>
+    </Row>
+  );
 }
