@@ -42,8 +42,12 @@ jobs:
       - uses: actions/setup-java@v4
         if: startsWith(matrix.variant, 'android')
         with: { distribution: temurin, java-version: 17 }
-      - uses: android-actions/setup-android@v3
+      - name: Verify runner Android SDK
         if: startsWith(matrix.variant, 'android')
+        run: |
+          test -n "${ANDROID_HOME:-}" && test -d "$ANDROID_HOME/platforms" || {
+            echo 'The runner-provided Android SDK is unavailable'; exit 1;
+          }
       - run: npm ci
       - name: Restore existing Android signing key
         if: startsWith(matrix.variant, 'android')

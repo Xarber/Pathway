@@ -66,3 +66,7 @@ Work is recorded in Conventional Commits on local `testing`. `beta` and `main` a
 - The browser exposed a map teardown error. The web adapter now disconnects its resize observer on teardown and fits live data without queuing animated camera moves. The repeated scenario completed with zero uncaught page errors.
 - Type checking and 28 automated tests passed. Expo exported iOS and Android Hermes JavaScript bundles. Native binaries, simulator/emulator behavior, device permissions, iOS Glass and physical-device tracking remain unverified.
 - X-Center staging is configured for private loopback services. The host and PostGIS container were unavailable for runtime validation. No release or deployment was performed.
+
+## Public build workflow follow-up — 2026-11-14
+
+GitHub Actions run 43507456006 passed validation, the unsigned iOS device IPA job and the iOS Simulator job. Both Android jobs failed during SDK setup, before compilation or signing: the setup action requested the obsolete SDK package `tools`. The matrix now uses the SDK provided by the GitHub Ubuntu runner. Signed Android artifacts require the Pathway release keystore secrets and a restricted Android Maps key. The manual checks in run 43507466837 passed.
