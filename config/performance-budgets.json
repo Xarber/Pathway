@@ -1,0 +1,19 @@
+{
+  "measurement": "targets awaiting baseline measurements",
+  "webP75": {
+    "lcpMs": 2500,
+    "inpMs": 200,
+    "cls": 0.1
+  },
+  "api": {
+    "localReadP95Ms": 250,
+    "maxErrorRate": 0.01
+  },
+  "native": {
+    "coldStartP75Ms": 3000
+  },
+  "changedCodeCoverage": {
+    "line": 0.8,
+    "branch": 0.7
+  }
+}

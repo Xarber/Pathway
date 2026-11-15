@@ -1,6 +1,7 @@
 name: Manual checks
 on:
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 jobs:

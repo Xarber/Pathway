@@ -36,3 +36,5 @@ No full plugin runtime is implemented. Provider and platform adapters are extens
 - Use X-Center by default. Follow `docs/XCENTER.md` for staging and preserve the established publication scope. Reuse the confirmed existing Pathway repository.
 - Prefer configured hardware-backed commit signing. Use a command-local unsigned fallback if the key is unavailable and report it. Rewriting existing commits requires explicit authorization.
 - Consult applicable design and motion skills, verify contrast and Reduced Motion, and test the changed interface in the browser and on available native targets.
+
+Read [the compliance manifest](uads.json), [requirements registry](docs/UADS_REQUIREMENTS.md), and [ordered active queue](docs/ACTIVE_TASKS.md) before substantial work. Keep evidence and queue states current.

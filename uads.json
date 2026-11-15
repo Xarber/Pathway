@@ -1,0 +1,183 @@
+{
+  "uadsVersion": "sections-1-52",
+  "manifestVersion": 1,
+  "project": {
+    "name": "Pathway",
+    "repository": "Xarber/Pathway",
+    "profiles": [
+      "mobile-app",
+      "web-app",
+      "backend-service"
+    ],
+    "framework": "Expo 58 / React Native / Fastify",
+    "platforms": [
+      "ios",
+      "android",
+      "web",
+      "linux-server"
+    ],
+    "hosting": "X-Center"
+  },
+  "features": {
+    "onboarding": "partial",
+    "screenshotRendering": "pending",
+    "sampleDataMode": "pending",
+    "developerOptions": "partial",
+    "ideas": "implemented",
+    "pwa": "implemented",
+    "productionServerSwitcher": "pending"
+  },
+  "distribution": {
+    "source": "public",
+    "xcenter": "authorized",
+    "nativeBuilds": "authorized",
+    "nativeReleases": "not authorized"
+  },
+  "quality": {
+    "workflow": ".github/workflows/uads-quality.yml",
+    "budgets": "config/performance-budgets.json",
+    "release": "config/release-metadata.json"
+  },
+  "requirements": [
+    {
+      "id": "UADS-ARCH-001",
+      "applicability": "required",
+      "state": "pending",
+      "evidence": [
+        "docs/ARCHITECTURE.md"
+      ]
+    },
+    {
+      "id": "UADS-GIT-001",
+      "applicability": "required",
+      "state": "pending",
+      "evidence": [
+        "AGENTS.md"
+      ]
+    },
+    {
+      "id": "UADS-DOC-001",
+      "applicability": "required",
+      "state": "pending",
+      "evidence": [
+        "docs/INDEX.md"
+      ]
+    },
+    {
+      "id": "UADS-PLAT-001",
+      "applicability": "required",
+      "state": "pending",
+      "evidence": [
+        "docs/FEATURES.md"
+      ]
+    },
+    {
+      "id": "UADS-UI-001",
+      "applicability": "required",
+      "state": "pending",
+      "evidence": [
+        "docs/BRANDING.md"
+      ]
+    },
+    {
+      "id": "UADS-DEV-001",
+      "applicability": "required",
+      "state": "pending",
+      "evidence": [
+        "docs/features/DEVELOPER_IDEAS.md"
+      ]
+    },
+    {
+      "id": "UADS-UI-002",
+      "applicability": "required",
+      "state": "pending",
+      "evidence": [
+        "docs/FEATURES.md"
+      ]
+    },
+    {
+      "id": "UADS-DEV-002",
+      "applicability": "required",
+      "state": "pending",
+      "evidence": [
+        "docs/XCENTER.md"
+      ]
+    },
+    {
+      "id": "UADS-DIST-001",
+      "applicability": "required",
+      "state": "pending",
+      "evidence": [
+        "docs/features/WEB_ENTRY.md"
+      ]
+    },
+    {
+      "id": "UADS-SEC-001",
+      "applicability": "required",
+      "state": "pending",
+      "evidence": [
+        "docs/SECURITY.md"
+      ]
+    },
+    {
+      "id": "UADS-QA-001",
+      "applicability": "required",
+      "state": "pending",
+      "evidence": [
+        "docs/TESTING.md"
+      ]
+    },
+    {
+      "id": "UADS-CI-001",
+      "applicability": "required",
+      "state": "blocked",
+      "evidence": [
+        ".github/workflows/mobile.yml"
+      ],
+      "reason": "Android signing and Maps credentials are unavailable."
+    },
+    {
+      "id": "UADS-REL-001",
+      "applicability": "required",
+      "state": "pending",
+      "evidence": [
+        "docs/RELEASES.md"
+      ]
+    },
+    {
+      "id": "UADS-DIST-002",
+      "applicability": "conditional",
+      "state": "pending",
+      "evidence": [
+        "docs/RELEASES.md"
+      ],
+      "reason": "Requires authorized native releases and usable distribution assets."
+    },
+    {
+      "id": "UADS-OPS-001",
+      "applicability": "required",
+      "state": "blocked",
+      "evidence": [
+        "docs/XCENTER.md"
+      ],
+      "reason": "X-Center host access and live service verification are outstanding."
+    },
+    {
+      "id": "UADS-QA-002",
+      "applicability": "required",
+      "state": "pending",
+      "evidence": [
+        "docs/UADS_REQUIREMENTS.md"
+      ]
+    },
+    {
+      "id": "UADS-QA-003",
+      "applicability": "required",
+      "state": "pending",
+      "evidence": [
+        "docs/ACTIVE_TASKS.md"
+      ]
+    }
+  ],
+  "exceptions": []
+}

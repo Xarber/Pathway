@@ -1,0 +1,286 @@
+{
+  "UADS-ARCH-001": {
+    "title": "License, architecture, extension points and synchronization",
+    "sections": [
+      1,
+      2,
+      3,
+      10,
+      12,
+      13,
+      14
+    ],
+    "priority": "mandatory",
+    "verification": "docs/ARCHITECTURE.md",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "review",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  },
+  "UADS-GIT-001": {
+    "title": "Repository continuity, signing and branch workflow",
+    "sections": [
+      6,
+      7,
+      27,
+      30,
+      34,
+      36
+    ],
+    "priority": "mandatory",
+    "verification": "AGENTS.md",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "review",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  },
+  "UADS-DOC-001": {
+    "title": "Developer documentation and reporting",
+    "sections": [
+      4,
+      5,
+      28,
+      29
+    ],
+    "priority": "mandatory",
+    "verification": "docs/INDEX.md",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "review",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  },
+  "UADS-PLAT-001": {
+    "title": "Platform behavior and representative device validation",
+    "sections": [
+      11,
+      22,
+      36
+    ],
+    "priority": "mandatory",
+    "verification": "docs/FEATURES.md",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "review",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  },
+  "UADS-UI-001": {
+    "title": "Accessible interface, branding and motion",
+    "sections": [
+      17,
+      18,
+      33,
+      36,
+      42
+    ],
+    "priority": "mandatory",
+    "verification": "docs/BRANDING.md",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "review",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  },
+  "UADS-DEV-001": {
+    "title": "Developer Options and offline Ideas",
+    "sections": [
+      15,
+      35
+    ],
+    "priority": "mandatory",
+    "verification": "docs/features/DEVELOPER_IDEAS.md",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "review",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  },
+  "UADS-UI-002": {
+    "title": "First launch onboarding and isolated screenshot rendering",
+    "sections": [
+      19,
+      20,
+      37
+    ],
+    "priority": "mandatory",
+    "verification": "docs/FEATURES.md",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "review",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  },
+  "UADS-DEV-002": {
+    "title": "Endpoint configuration and safe developer overrides",
+    "sections": [
+      38,
+      43
+    ],
+    "priority": "mandatory",
+    "verification": "docs/XCENTER.md",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "review",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  },
+  "UADS-DIST-001": {
+    "title": "Web entry, PWA and live installation options",
+    "sections": [
+      32,
+      36,
+      39
+    ],
+    "priority": "mandatory",
+    "verification": "docs/features/WEB_ENTRY.md",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "review",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  },
+  "UADS-SEC-001": {
+    "title": "Privacy, session boundaries and authorization",
+    "sections": [
+      21,
+      43
+    ],
+    "priority": "mandatory",
+    "verification": "docs/SECURITY.md",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "review",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  },
+  "UADS-QA-001": {
+    "title": "Automated verification, accessibility and performance",
+    "sections": [
+      23,
+      26,
+      42,
+      48
+    ],
+    "priority": "mandatory",
+    "verification": "docs/TESTING.md",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "uads-quality",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  },
+  "UADS-CI-001": {
+    "title": "Four-format native build matrix",
+    "sections": [
+      8,
+      9,
+      49
+    ],
+    "priority": "mandatory",
+    "verification": ".github/workflows/mobile.yml",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "native-build",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  },
+  "UADS-REL-001": {
+    "title": "Versioning, changelog, artifact validation and recovery",
+    "sections": [
+      16,
+      31,
+      40,
+      44
+    ],
+    "priority": "mandatory",
+    "verification": "docs/RELEASES.md",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "review",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  },
+  "UADS-DIST-002": {
+    "title": "Alternative distribution synchronization",
+    "sections": [
+      25,
+      39,
+      40,
+      49
+    ],
+    "priority": "mandatory",
+    "verification": "docs/RELEASES.md",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "review",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  },
+  "UADS-OPS-001": {
+    "title": "X-Center deployment, monitoring, backups and recovery",
+    "sections": [
+      24,
+      36,
+      45
+    ],
+    "priority": "mandatory",
+    "verification": "docs/XCENTER.md",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "review",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  },
+  "UADS-QA-002": {
+    "title": "Compliance bootstrap, traceability and evidence",
+    "sections": [
+      41,
+      46,
+      47,
+      48,
+      49,
+      50
+    ],
+    "priority": "mandatory",
+    "verification": "docs/UADS_REQUIREMENTS.md",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "uads-quality",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  },
+  "UADS-QA-003": {
+    "title": "Persistent ordered task queue and reconciliation",
+    "sections": [
+      51,
+      52
+    ],
+    "priority": "mandatory",
+    "verification": "docs/ACTIVE_TASKS.md",
+    "evidence": [
+      "docs/reports/VALIDATION.md"
+    ],
+    "gate": "uads-quality",
+    "dependencies": [],
+    "exceptionPolicy": "Explicit approval and recorded review required"
+  }
+}

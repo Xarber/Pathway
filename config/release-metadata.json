@@ -1,0 +1,17 @@
+{
+  "versionSource": "apps/mobile/package.json",
+  "channels": {
+    "integration": "testing",
+    "beta": "beta",
+    "stable": "main"
+  },
+  "workflow": ".github/workflows/mobile.yml",
+  "nativePublicationAuthorized": false,
+  "targetOrigin": "https://pathway.xcenter.it",
+  "requiredVariants": [
+    "ios-unsigned",
+    "ios-simulator",
+    "android-apk",
+    "android-aab"
+  ]
+}
