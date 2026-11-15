@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import React, { useState } from 'react';
 import { View } from 'react-native';
-import { canSwitchInstance, useSession } from '../lib/session';
+import { canSwitchInstance, serverConfigured, useSession } from '../lib/session';
 import { Card, Button, Chip, Field, Heading, Info, Label, Row, Icon } from './ui';
 export default function Auth() {
   const { authenticate, base, act, switchInstance } = useSession();
@@ -20,6 +20,14 @@ export default function Auth() {
       register ? { email, password, name, username } : { email, password },
     );
     setBusy(false);
+  }
+  if (!serverConfigured) {
+    return (
+      <Card>
+        <Heading>Pathway is temporarily unavailable</Heading>
+        <Label>Try again later or contact the service operator.</Label>
+      </Card>
+    );
   }
   return (
     <View

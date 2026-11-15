@@ -12,11 +12,16 @@ import type {
 } from '../../../../packages/shared/src/index';
 import { coarse } from '../../../../packages/geospatial/src/index';
 import { secrets, storage } from './storage';
+import { resolveServerConfig } from './server-config';
 type Session = { token: string; profile: Profile };
-const embeddedOrigin = process.env.EXPO_PUBLIC_API_URL?.trim();
-export const canSwitchInstance = !embeddedOrigin;
+const serverConfig = resolveServerConfig(
+  process.env.EXPO_PUBLIC_API_URL,
+  process.env.EXPO_PUBLIC_DISTRIBUTION === 'production',
+);
+export const canSwitchInstance = serverConfig.canSwitch;
 export const developerOptionsEnabled = process.env.EXPO_PUBLIC_DISTRIBUTION !== 'production';
-const defaultOrigin = embeddedOrigin || 'http://localhost:3001';
+export const serverConfigured = !!serverConfig.origin;
+const defaultOrigin = serverConfig.origin;
 function useSessionState() {
   const [base, setBase] = useState(defaultOrigin);
   const [session, setSession] = useState<Session | null>(null);
@@ -37,7 +42,7 @@ function useSessionState() {
       .then(([url, raw]) => {
         const origin = canSwitchInstance && url ? url : defaultOrigin;
         setBase(origin);
-        if (!raw) return;
+        if (!raw || !serverConfigured) return;
         const stored = JSON.parse(raw) as Session & { origin?: string };
         if (stored.origin ? stored.origin === origin : canSwitchInstance || url === origin)
           setSession(stored);
@@ -173,6 +178,7 @@ function useSessionState() {
   }
   async function authenticate(path: string, data: unknown) {
     return act(async () => {
+      if (!serverConfigured) throw Error('Pathway is temporarily unavailable.');
       const s = await api.request<Session>(path, 'POST', data);
       setSession(s);
       await secrets.set(JSON.stringify({ ...s, origin: base }));

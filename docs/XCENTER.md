@@ -51,3 +51,5 @@ Copy the compiled API, production-only npm dependencies, root package.json, stat
 Verify the public URL, health commit, PWA and two-user browser flow with `PATHWAY_BROWSER_ORIGIN=https://pathway.xcenter.it npm run test:browser`. The deployed smoke test creates temporary accounts and deletes them when finished. Use synthetic locations only. Roll back by restoring the previous release directory and build commit in the environment, then recreating API and web. Preserve the database and keep database backups separate from source archives. On a first deploy, withdraw only Pathway's Nginx vhost if public validation fails.
 
 Routing and search remain opt-in provider integrations. Configure dedicated, coverage-appropriate endpoints via `ROUTING_URL` and `GEOCODING_URL` before advertising their availability. The coordinate-based Journey Room workflow works without these providers.
+
+Production rejects missing or malformed HTTPS origins and shows a service-unavailable screen before account entry. The client does not restore a stored session for an invalid deployment configuration. The developer-only server switcher remains tracked in the active queue.
